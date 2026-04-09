@@ -45,8 +45,8 @@ DMT_intro <- function(tempo) {
     # --------------------------------------------------
     # 4. Grid + interaction
     # --------------------------------------------------
-    psychTestR::one_button_page(
-      shiny::tags$div(
+    psychTestR::page(
+      ui = shiny::tags$div(
         dmt_ui_header(),
         dmt_ui(trial_no = NULL,
                num_trials = NULL,
@@ -54,7 +54,8 @@ DMT_intro <- function(tempo) {
                tempo = tempo),
         shiny::tags$p("The grid represents one bar divided into 16 steps."),
         shiny::tags$p("Click to activate or deactivate sounds."),
-        shiny::tags$p("Feel free to explore how this works below and click play to hear your input.")
+        shiny::tags$p("Feel free to explore how this works below and click play to hear your input."),
+        shiny::tags$button("Next", class = "btn", onclick = "window.stopDMT();next_page();")
       )
     ),
 
