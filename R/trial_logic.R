@@ -1,6 +1,6 @@
 
 
-DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix) {
+DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix, show_solution = FALSE) {
 
   psychTestR::join(
 
@@ -24,14 +24,15 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
             tempo = tempo,
             attempt = attempt,
             demo = demo,
-            stimulus_drum_matrix = stimulus_drum_matrix
+            stimulus_drum_matrix = stimulus_drum_matrix,
+            show_solution = show_solution
           )
 
         }),
 
         # Feedback
 
-        DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix),
+        if(!show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -66,19 +67,8 @@ while_logic <- function(trial_no) {
 
   is_correct <- isTRUE(answer$global_correct)
 
-  print('while_logic')
-  print('is_correct')
-  print(is_correct)
-
-
   # Stop if correct
   if (is_correct) return(FALSE)
-
-  print('last_attempt')
-  print(last_attempt)
-
-  print('last_attempt < 4L')
-  print(last_attempt < 4L)
 
   # Otherwise continue up to 4 attempts
   return(last_attempt < 4L)
@@ -96,6 +86,7 @@ DMT_trial_page <- function(trial_no,
                            show_play_buttons = TRUE,
                            stimulus_drum_matrix = drum_matrix,
                            demo = FALSE) {
+
 
   stimulus <- stimulus_drum_matrix %>%
     dplyr::filter(Stimulus == trial_no)
@@ -117,9 +108,9 @@ DMT_trial_page <- function(trial_no,
 
     label = paste0("DMT_trial_", trial_no, "_attempt_", attempt),
 
-    get_answer = dmt_get_answer,
+    get_answer = if(show_solution) NULL else dmt_get_answer,
 
-    save_answer = TRUE
+    save_answer = !show_solution
   )
 }
 
@@ -168,25 +159,18 @@ dmt_get_answer <- function(input, ...) {
   }
 
 
+  inst_levels <- c("HiHat", "Snare", "Kick")
 
   res_summary <- compare %>%
-    dplyr::group_by(Instrument) %>%
-    dplyr::summarise(ProportionCorrect = mean(Correct, na.rm = TRUE),
-                     NoMistakes = sum(Mistake, na.rm = TRUE),
-                     .groups = "drop")
+    dplyr::group_by(Instrument, .drop = FALSE) %>%
+    dplyr::summarise(
+      ProportionCorrect = mean(Correct, na.rm = TRUE),
+      NoMistakes = sum(Mistake, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    complete_instruments(inst_levels = inst_levels)
 
   global_correct <- all(res_summary$ProportionCorrect == 1)
-
-  # browser()
-
-  print('res_summary')
-  print(res_summary)
-
-  print('global_correct')
-  print(global_correct)
-
-  print('correct_answer')
-  print(correct_answer)
 
 
   list(
@@ -206,8 +190,6 @@ dmt_ui <- function(trial_no,
                    show_play_buttons = TRUE,
                    demo = FALSE) {
 
-  logging::loginfo("trial_no: %i", trial_no)
-
   stopifnot(is.null(feedback) || all(dim(feedback) == c(2, 3)))
 
   input_grid <- shiny::tags$div(
@@ -222,7 +204,7 @@ dmt_ui <- function(trial_no,
     # ------------------------------------------------------------
 
     if(show_play_buttons) shiny::fluidRow(
-      shiny::actionButton("play_stimulus", "Play stimulus"),
+      if(!is.null(stimulus_json)) shiny::actionButton("play_stimulus", "Play stimulus"),
       if(!demo) shiny::actionButton("play_sequencer", "Play your pattern")
     ),
 
@@ -287,7 +269,7 @@ dmt_ui <- function(trial_no,
     ',
         stimulus_json,
         tolower(show_solution),
-        trial_no,
+        if(is.null(trial_no)) "" else trial_no,
         tolower(demo)
       )
     ),
@@ -300,10 +282,8 @@ dmt_ui <- function(trial_no,
       )
     ),
 
-    if (!is.null(trial_no))
-      shiny::tags$p(shiny::strong(
-        sprintf("Trial %s / %s", trial_no, num_trials)
-      )),
+    # Trial No. UI
+    display_trial_no(trial_no, num_trials, demo),
 
     # ------------------------------------------------------------
     # FEEDBACK
@@ -333,4 +313,38 @@ dmt_ui <- function(trial_no,
     "
     )
   )
+}
+
+
+display_trial_no <- function(trial_no, num_trials, demo = FALSE) {
+  if (!is.null(trial_no))
+    shiny::tags$p(shiny::strong(
+      if(demo) sprintf("Example Trial %s / %s", trial_no, num_trials) else sprintf("Trial %s / %s", trial_no, num_trials)
+    ))
+}
+
+
+complete_instruments <- function(res_summary,
+                                 inst_levels = c("Kick", "HiHat", "Snare")) {
+
+  # Add missing instruments
+  missing_insts <- setdiff(inst_levels, res_summary$Instrument)
+
+  if (length(missing_insts) > 0) {
+    res_summary <- dplyr::bind_rows(
+      res_summary,
+      tibble::tibble(
+        Instrument = missing_insts,
+        ProportionCorrect = 1L,
+        NoMistakes = 0L
+      )
+    )
+  }
+
+  # Enforce factor order + sort
+  res_summary %>%
+    dplyr::mutate(
+      Instrument = factor(Instrument, levels = inst_levels)
+    ) %>%
+    dplyr::arrange(Instrument)
 }

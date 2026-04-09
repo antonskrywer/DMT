@@ -61,6 +61,7 @@ feedback_layer_2 <- function(global_correct, breakdown) {
     ) %>%
     dplyr::select(Feedback)
 
+
   shiny::tags$div(
     if (global_correct) {
       shiny::tags$p("Correct!")

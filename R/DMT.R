@@ -5,7 +5,7 @@
 #'
 #' @param tempo
 #' @param num_trials
-#' @param num_example_trials
+#' @param num_examples
 #'
 #' @returns
 #' @export
@@ -13,10 +13,10 @@
 #' @examples
 DMT_standalone <- function(tempo = 100,
                            num_trials = 5L,
-                           num_example_trials = 3) {
+                           num_examples = 3) {
   DMT(tempo = tempo,
       num_trials = num_trials,
-      num_example_trials = num_example_trials) %>%
+      num_examples = num_examples) %>%
     psychTestR::make_test(
       opt = psychTestR::test_options(
         title = "Drum Machine Test",
@@ -38,10 +38,7 @@ DMT_standalone <- function(tempo = 100,
 #' @export
 #'
 #' @examples
-DMT <- function(num_trials = 5L, tempo = 100, num_example_trials = 3) {
-
-  easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
-    dplyr::filter(Stimulus %in% 1:num_example_trials)
+DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3) {
 
   # Setup resource paths
   dmt_resources()
@@ -49,12 +46,65 @@ DMT <- function(num_trials = 5L, tempo = 100, num_example_trials = 3) {
   psychTestR::join(
 
     # Intro
-    DMT_intro_and_training(easy_stimuli_drum_matrix, tempo),
+    DMT_intro(tempo),
+
+    DMT_training(num_examples, tempo),
+
+    psychTestR::one_button_page("Now you're ready for the real thing. Good luck!"),
 
     # Main Trials
-    purrr::map(1:num_trials, ~ DMT_page_loop(.x, num_trials, tempo)) %>% unlist(),
+    DMT_main_trials(num_trials, tempo),
 
     psychTestR::final_page("You have finished the Drum Machine Test!")
+  )
+}
+
+
+DMT_main_trials <- function(num_trials, tempo) {
+  purrr::map(1:num_trials, ~ DMT_page_loop(.x, num_trials, tempo)) %>% unlist()
+}
+
+DMT_training <- function(num_examples, tempo) {
+  purrr::map(1:num_examples, ~ DMT_demo_loop(.x, num_examples, tempo)) %>% unlist()
+}
+
+
+DMT_demo_loop <- function(trial_no, num_examples, tempo) {
+
+  easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
+    dplyr::filter(Stimulus %in% 1:num_examples)
+
+  psychTestR::join(
+
+    one_button_page_trial_no(trial_no, num_examples, demo = TRUE,
+                             text = 'The next page will show you the correct answer. Click "Play stimulus" to hear it.'),
+
+    # Show stimulus as example
+    DMT_trial_page(
+      trial_no = trial_no,
+      num_trials = num_examples,
+      tempo = tempo,
+      attempt = 0L,
+      demo = TRUE,
+      stimulus_drum_matrix = easy_stimuli_drum_matrix,
+      show_solution = TRUE
+    ),
+
+    one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = "Now enter the pattern you just saw."),
+
+    # Get user to enter it
+    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = easy_stimuli_drum_matrix)
+
+  ) %>% unlist()
+}
+
+
+one_button_page_trial_no <- function(trial_no, num_trials, text, demo = FALSE) {
+  psychTestR::one_button_page(
+    shiny::tags$div(
+      display_trial_no(trial_no, num_trials, demo = demo),
+      shiny::tags$p(text),
+    )
   )
 }
 

@@ -1,11 +1,5 @@
 
-DMT_intro_and_training <- function(easy_stimuli_drum_matrix, tempo = 100) {
-
-  demo_ids <- easy_stimuli_drum_matrix %>%
-    dplyr::pull(Stimulus) %>%
-    unique()
-
-  n_examples <- length(demo_ids)
+DMT_intro <- function(tempo) {
 
   psychTestR::join(
 
@@ -14,16 +8,26 @@ DMT_intro_and_training <- function(easy_stimuli_drum_matrix, tempo = 100) {
     # --------------------------------------------------
     psychTestR::one_button_page(
       shiny::tags$div(
+        dmt_ui_header(),
         shiny::tags$p(shiny::tags$strong("Welcome to the Drum Machine Test")),
         shiny::tags$p("This test measures your musical learning ability."),
-        shiny::tags$p("You will learn to recreate drum patterns using a virtual drum machine."),
+        shiny::tags$p("You will learn to recreate drum patterns using a virtual drum machine.")
+      )
+    ),
+
+    # --------------------------------------------------
+    # 2. General reassurance
+    # --------------------------------------------------
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
         shiny::tags$p("The difficulty will adapt to your performance."),
         shiny::tags$p("Don't worry if it feels difficult at first.")
       )
     ),
 
     # --------------------------------------------------
-    # 2. Instructions
+    # 3. How it works (structure + layers)
     # --------------------------------------------------
     psychTestR::one_button_page(
       shiny::tags$div(
@@ -34,21 +38,44 @@ DMT_intro_and_training <- function(easy_stimuli_drum_matrix, tempo = 100) {
           shiny::tags$li("Hi-hat (top row)"),
           shiny::tags$li("Snare (middle row)"),
           shiny::tags$li("Bass drum (bottom row)")
-        ),
-        shiny::tags$p("The grid represents one bar divided into 16 steps."),
-        shiny::tags$p("Click to activate/deactivate sounds."),
-        shiny::tags$p("A beep marks the beginning."),
-        shiny::tags$p("Recreate the pattern as accurately as possible.")
+        )
       )
     ),
 
     # --------------------------------------------------
-    # 3. Feedback explanation
+    # 4. Grid + interaction
+    # --------------------------------------------------
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
+        dmt_ui(trial_no = NULL,
+               num_trials = NULL,
+               stimulus_json = NULL,
+               tempo = tempo),
+        shiny::tags$p("The grid represents one bar divided into 16 steps."),
+        shiny::tags$p("Click to activate or deactivate sounds."),
+        shiny::tags$p("Feel free to explore how this works below and click play to hear your input.")
+      )
+    ),
+
+    # --------------------------------------------------
+    # 5. Timing + goal
+    # --------------------------------------------------
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
+        shiny::tags$p("Your goal is to recreate a given pattern as accurately as possible.")
+      )
+    ),
+
+    # --------------------------------------------------
+    # 6. Feedback intro
     # --------------------------------------------------
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
         shiny::tags$p(shiny::tags$strong("Feedback system")),
+        shiny::tags$p("After each attempt, you will be told:"),
         shiny::tags$ol(
           shiny::tags$li("Correct / Incorrect"),
           shiny::tags$li("Which layer contains mistakes"),
@@ -59,112 +86,40 @@ DMT_intro_and_training <- function(easy_stimuli_drum_matrix, tempo = 100) {
     ),
 
     # --------------------------------------------------
-    # 4. Demo loop WITH FEEDBACK
+    # 7. Practice trials
     # --------------------------------------------------
-    purrr::imap(demo_ids, function(stim_id, i) {
-
-      psychTestR::join(
-
-        # --------------------------
-        # 4.1 Observe (see + hear)
-        # --------------------------
-        psychTestR::reactive_page(function(state, ...) {
-
-          DMT_trial_page(
-            trial_no = stim_id,
-            num_trials = n_examples,
-            tempo = tempo,
-            show_solution = TRUE,
-            show_input_grid = TRUE,
-            show_play_buttons = TRUE,
-            demo = TRUE,
-            stimulus_drum_matrix = easy_stimuli_drum_matrix
-          )
-
-        }),
-
-        psychTestR::code_block(function(state, ...) {
-          psychTestR::set_global("reset_dmt", TRUE, state)
-        }),
-
-        # --------------------------
-        # 4.2 Instruction
-        # --------------------------
-        psychTestR::one_button_page(
-          shiny::tags$p("Now try to recreate this pattern yourself."),
-          button_text = "Start"
-        ),
-
-        # --------------------------
-        # 4.3 Learning loop
-        # --------------------------
-        psychTestR::join(
-
-          psychTestR::code_block(function(state, ...) {
-            psychTestR::set_local("attempt", 1L, state)
-          }),
-
-          psychTestR::while_loop(
-
-            test = while_logic(stim_id),
-
-            logic = list(
-
-              # --------------------------
-              # Trial attempt
-              # --------------------------
-              psychTestR::reactive_page(function(state, ...) {
-
-                attempt <- psychTestR::get_local("attempt", state)
-
-                DMT_trial_page(
-                  trial_no = stim_id,
-                  num_trials = n_examples,
-                  tempo = tempo,
-                  attempt = attempt,
-                  demo = TRUE,
-                  show_solution = FALSE,
-                  show_input_grid = TRUE,
-                  show_play_buttons = TRUE,
-                  stimulus_drum_matrix = easy_stimuli_drum_matrix
-                )
-
-              }),
-
-              # --------------------------
-              # Feedback (reuse yours!)
-              # --------------------------
-              DMT_feedback(stim_id, n_examples, tempo, easy_stimuli_drum_matrix, demo = TRUE),
-
-              # --------------------------
-              # Increment attempt
-              # --------------------------
-              psychTestR::code_block(function(state, ...) {
-                attempt <- psychTestR::get_local("attempt", state)
-                psychTestR::set_local("attempt", attempt + 1L, state)
-              })
-
-            )
-          )
-        ),
-
-        # --------------------------
-        # 4.4 Transition
-        # --------------------------
-        psychTestR::one_button_page(
-          shiny::tags$p(
-            if (i < n_examples) {
-              "Good! Let's try another example."
-            } else {
-              "Great! You're ready for the main task."
-            }
-          ),
-          button_text = if (i < n_examples) "Next example" else "Start main task"
-        )
-
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
+        shiny::tags$p(shiny::tags$strong("Practice trials")),
+        shiny::tags$p("Before the main task, you will complete a few practice trials."),
+        shiny::tags$p("You will receive feedback after each attempt.")
       )
+    ),
 
-    }) %>% unlist(recursive = FALSE)
+    # --------------------------------------------------
+    # 8. Reassurance
+    # --------------------------------------------------
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
+        shiny::tags$p("You can repeat each pattern multiple times."),
+        shiny::tags$p("It is completely normal to make mistakes at first.")
+      )
+    ),
 
-  )
+    # --------------------------------------------------
+    # 9. Strategy tip
+    # --------------------------------------------------
+    psychTestR::one_button_page(
+      shiny::tags$div(
+        dmt_ui_header(),
+        shiny::tags$p(shiny::tags$strong("Tip")),
+        shiny::tags$p("Focus on one layer at a time (hi-hat, snare, bass)."),
+        shiny::tags$p("Build the pattern step by step.")
+      )
+    )
+
+  ) %>% unlist(recursive = FALSE)
+
 }

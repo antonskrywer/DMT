@@ -4,10 +4,10 @@
 \alias{DMT_standalone}
 \title{Standalone Drum Machine Test}
 \usage{
-DMT_standalone(tempo = 100, num_trials = 5L, num_example_trials = 3)
+DMT_standalone(tempo = 100, num_trials = 5L, num_examples = 3)
 }
 \arguments{
-\item{num_example_trials}{}
+\item{num_examples}{}
 }
 \description{
 Standalone Drum Machine Test
