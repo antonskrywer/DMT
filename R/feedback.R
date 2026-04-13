@@ -55,7 +55,7 @@ feedback_layer_2 <- function(global_correct, breakdown) {
   feedback_parsed <- breakdown %>%
     dplyr::mutate(
       Feedback = dplyr::case_when(
-        NoMistakes > 1L ~ paste0("Mistake on ", Instrument),
+        NoMistakes > 0L ~ paste0("Mistake on ", Instrument),
         TRUE ~ paste0(Instrument, " — Correct!")
       )
     ) %>%
