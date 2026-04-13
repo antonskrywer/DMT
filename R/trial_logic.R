@@ -32,7 +32,7 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
 
         # Feedback
 
-        if(!show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix),
+        if(!show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -53,7 +53,10 @@ while_logic <- function(trial_no) {
   attempt <- psychTestR::get_local("attempt", state)
 
   # Always run first attempt
-  if (attempt == 1L) return(TRUE)
+  if (attempt == 1L) {
+    logging::loginfo("attempt == 1L so run the loop!")
+    return(TRUE)
+  }
 
   last_attempt <- attempt - 1L
 
@@ -61,14 +64,20 @@ while_logic <- function(trial_no) {
 
   results <- psychTestR::results(state)$result
 
-  if (!trial_name %in% names(results)) return(TRUE)
+  if (!trial_name %in% names(results)) {
+    logging::loginfo("%s not in results so run the loop!", trial_name)
+    return(TRUE)
+  }
 
   answer <- results[[trial_name]]
 
   is_correct <- isTRUE(answer$global_correct)
 
   # Stop if correct
-  if (is_correct) return(FALSE)
+  if (is_correct) {
+    logging::loginfo("is_correct TRUE, so stop and exit loop!")
+    return(FALSE)
+  }
 
   # Otherwise continue up to 4 attempts
   return(last_attempt < 4L)
@@ -189,6 +198,7 @@ dmt_ui <- function(trial_no,
                    show_input_grid = TRUE,
                    show_play_buttons = TRUE,
                    demo = FALSE) {
+
 
   stopifnot(is.null(feedback) || all(dim(feedback) == c(2, 3)))
 
