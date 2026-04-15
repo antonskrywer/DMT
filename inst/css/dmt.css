@@ -45,11 +45,18 @@ ol li::before {
 
 /* main sequencer layout */
 
+#sequencer-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
 .sequencer {
   display:grid;
   grid-template-columns:120px auto;
   row-gap:10px;
-  margin-bottom: 20px;
+  margin_bottom: 20px;
 }
 
 /* instrument labels */

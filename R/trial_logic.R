@@ -161,12 +161,14 @@ dmt_get_answer <- function(input, ...) {
 
   } else {
     compare <- correct_answer %>%
-      dplyr::left_join(user_answer_df,
+      dplyr::mutate(ShouldHaveSelected = TRUE) %>%
+      dplyr::full_join(user_answer_df,
                        by = c("Instrument", "BeatPositionSixteenth")) %>%
-      dplyr::mutate(Correct = UserSelected == 1,
-                    Mistake = UserSelected == 0)
-  }
+      dplyr::mutate(ShouldHaveSelected = dplyr::case_when(is.na(ShouldHaveSelected) ~ FALSE, TRUE ~ ShouldHaveSelected),
+                    Correct = ShouldHaveSelected & UserSelected == 1,
+                    Mistake = ShouldHaveSelected & UserSelected == 0 | !ShouldHaveSelected & UserSelected)
 
+  }
 
   inst_levels <- c("HiHat", "Snare", "Kick")
 
@@ -180,7 +182,6 @@ dmt_get_answer <- function(input, ...) {
     complete_instruments(inst_levels = inst_levels)
 
   global_correct <- all(res_summary$ProportionCorrect == 1)
-
 
   list(
     res_summary = res_summary,
@@ -220,41 +221,46 @@ dmt_ui <- function(trial_no,
 
     shiny::tags$br(),
 
-    # ------------------------------------------------------------
-    # BAR NUMBERS
-    # ------------------------------------------------------------
-
     shiny::tags$div(
-      class = "barnumbers",
 
-      # empty cell to align with instrument labels column
-      shiny::tags$div(class = "inst-spacer", ""),
+      id = "sequencer-wrapper",
 
-      lapply(1:16, function(i) {
-        if (i %% 4 == 1) {
-          shiny::tags$div(class = "barlabel", (i - 1) / 4 + 1)
-        } else {
-          shiny::tags$div(class = "barlabel-empty", "")
-        }
-      })
-    ),
+      # ------------------------------------------------------------
+      # BAR NUMBERS
+      # ------------------------------------------------------------
 
-    # ------------------------------------------------------------
-    # GRID
-    # ------------------------------------------------------------
+      shiny::tags$div(
+        class = "barnumbers",
 
-    shiny::tags$div(
-      class = "sequencer",
+        # empty cell to align with instrument labels column
+        shiny::tags$div(class = "inst-spacer", ""),
 
-      shiny::tags$div(class = "inst", "Hi-hat"),
-      shiny::tags$div(class = "grid", id = "row0"),
+        lapply(1:16, function(i) {
+          if (i %% 4 == 1) {
+            shiny::tags$div(class = "barlabel", (i - 1) / 4 + 1)
+          } else {
+            shiny::tags$div(class = "barlabel-empty", "")
+          }
+        })
+      ),
 
-      shiny::tags$div(class = "inst", "Snare"),
-      shiny::tags$div(class = "grid", id = "row1"),
+      # ------------------------------------------------------------
+      # GRID
+      # ------------------------------------------------------------
 
-      shiny::tags$div(class = "inst", "Kick"),
-      shiny::tags$div(class = "grid", id = "row2")
-    ),
+      shiny::tags$div(
+        class = "sequencer",
+
+        shiny::tags$div(class = "inst", "Hi-hat"),
+        shiny::tags$div(class = "grid", id = "row0"),
+
+        shiny::tags$div(class = "inst", "Snare"),
+        shiny::tags$div(class = "grid", id = "row1"),
+
+        shiny::tags$div(class = "inst", "Kick"),
+        shiny::tags$div(class = "grid", id = "row2")
+      ),
+    )
   )
 
   shiny::tags$div(
