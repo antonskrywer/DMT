@@ -181,7 +181,8 @@ dmt_get_answer <- function(input, ...) {
     ) %>%
     complete_instruments(inst_levels = inst_levels)
 
-  global_correct <- all(res_summary$ProportionCorrect == 1)
+
+  global_correct <- all(res_summary$NoMistakes == 0)
 
   list(
     res_summary = res_summary,
