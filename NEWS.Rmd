@@ -1,5 +1,9 @@
 
 
+# DMT 0.2.1
+
+- Tidy complexity funs.
+
 # DMT 0.2.0
 
 - Add `with_feedback`parameter to `DMT` functions to make feedback optional (mainly for quick testing).
