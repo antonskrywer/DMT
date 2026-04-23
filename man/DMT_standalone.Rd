@@ -4,10 +4,15 @@
 \alias{DMT_standalone}
 \title{Standalone Drum Machine Test}
 \usage{
-DMT_standalone(tempo = 100, num_trials = 5L, num_examples = 3)
+DMT_standalone(
+  tempo = 100,
+  num_trials = 5L,
+  num_examples = 3,
+  with_feedback = TRUE
+)
 }
 \arguments{
-\item{num_examples}{}
+\item{with_feedback}{}
 }
 \description{
 Standalone Drum Machine Test

@@ -4,10 +4,10 @@
 \alias{DMT}
 \title{Embed Drum Machine Test in battery}
 \usage{
-DMT(num_trials = 5L, tempo = 100, num_examples = 3)
+DMT(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = TRUE)
 }
 \arguments{
-\item{num_example_trials}{}
+\item{with_feedback}{}
 }
 \description{
 Embed Drum Machine Test in battery

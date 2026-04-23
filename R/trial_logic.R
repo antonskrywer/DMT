@@ -1,6 +1,6 @@
 
 
-DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix, show_solution = FALSE) {
+DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix, show_solution = FALSE, with_feedback = TRUE) {
 
   psychTestR::join(
 
@@ -10,7 +10,7 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
 
     psychTestR::while_loop(
 
-      test = while_logic(trial_no),
+      test = if(with_feedback) while_logic(trial_no) else no_feedback_logic(),
 
       logic = list(
 
@@ -32,7 +32,7 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
 
         # Feedback
 
-        if(!show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
+        if(!show_solution && with_feedback) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -84,6 +84,11 @@ while_logic <- function(trial_no) {
   }
 }
 
+no_feedback_logic <- function() {
+  function(state, ...) {
+    psychTestR::get_local("attempt", state) == 1L
+  }
+}
 
 DMT_trial_page <- function(trial_no,
                            num_trials,

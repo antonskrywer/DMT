@@ -6,4 +6,7 @@
 
 devtools::load_all(".")
 
-DMT_standalone(tempo = 100, num_trials = 5L)
+# DMT_standalone(tempo = 100, num_trials = 5L)
+
+
+DMT_standalone(tempo = 100, num_trials = 40L, num_examples = 0L, with_feedback = FALSE)
