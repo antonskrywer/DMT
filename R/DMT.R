@@ -97,7 +97,7 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE) {
     one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = "Now enter the pattern you just saw."),
 
     # Get user to enter it
-    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = easy_stimuli_drum_matrix, tempo, with_feedback = with_feedback)
+    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = easy_stimuli_drum_matrix, with_feedback = with_feedback)
 
   ) %>% unlist()
 }

@@ -2,6 +2,12 @@
 
 DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix, show_solution = FALSE, with_feedback = TRUE) {
 
+  logging::loginfo("show_solution: %s", show_solution)
+
+  logging::loginfo("with_feedback: %s", with_feedback)
+
+  logging::loginfo("!show_solution && with_feedback: %s", !show_solution && with_feedback )
+
   psychTestR::join(
 
     psychTestR::code_block(function(state, ...) {
@@ -32,7 +38,7 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
 
         # Feedback
 
-        if(!show_solution && with_feedback) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
+        if (with_feedback && !show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -49,6 +55,8 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
 while_logic <- function(trial_no) {
 
   function(state, ...) {
+
+  logging::loginfo("Run while_logic")
 
   attempt <- psychTestR::get_local("attempt", state)
 
@@ -86,6 +94,9 @@ while_logic <- function(trial_no) {
 
 no_feedback_logic <- function() {
   function(state, ...) {
+
+    logging::loginfo("Run no_feedback_logic")
+
     psychTestR::get_local("attempt", state) == 1L
   }
 }
@@ -101,6 +112,7 @@ DMT_trial_page <- function(trial_no,
                            stimulus_drum_matrix = drum_matrix,
                            demo = FALSE) {
 
+  logging::loginfo("show_solution?? %s", show_solution)
 
   stimulus <- stimulus_drum_matrix %>%
     dplyr::filter(Stimulus == trial_no)
