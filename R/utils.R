@@ -48,3 +48,5 @@ is.scalar.integerlike <- function(x) {
 is.null.or <- function(x, f) {
   is.null(x) || f(x)
 }
+
+

@@ -45,17 +45,30 @@ filt_test %>%
   filter(!Beats %in% sixteenth_divisions)
 
 
-# Remove 10 and 15
+# Remove 10 and 22 because they don't use sixteenth divisions
 
 drum_matrix <- drum_matrix %>%
   filter(!Stimulus %in% c(10, 22) ) %>%
   mutate(
     Instrument = case_when(
-      Instrument == "SnareDrum" ~ "Snare",
+      Instrument %in% c("SnareDrumClick", "SnareDrum", "SnareDrumRoll") ~ "Snare",
       Instrument == "BassDrum" ~ "Kick",
+      Instrument == "RideCymbalCrashed" ~"HiHat",
       TRUE ~ Instrument
     )
   )
+
+
+# Pattern 5 and 8 are the same, when we just use the 1st bar; pattern 19 and 14 are also very similar.
+# So just use one of each pair.
+
+
+drum_matrix <- drum_matrix %>%
+  dplyr::filter(!Stimulus %in% c(5, 14)) %>%
+  dplyr::rename(OriginalStimulusId = Stimulus) %>%
+  dplyr::arrange(OriginalStimulusId) %>%
+  dplyr::mutate(Stimulus = dplyr::dense_rank(OriginalStimulusId))
+
 
 
 
