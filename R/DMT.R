@@ -69,10 +69,10 @@ DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = 
 
   # Label
   easy_stimuli_drum_matrix_filtered <- easy_stimuli_drum_matrix_filtered %>%
-    mutate(Source = "easy")
+    dplyr::mutate(Source = "easy")
 
   drum_matrix <- drum_matrix %>%
-    mutate(Source = "normal")
+    dplyr::mutate(Source = "normal")
 
   if(stratified_sampling) {
 
@@ -94,13 +94,13 @@ DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = 
       # labels for each dataset
       get_halves <- function(dat) {
         dat %>%
-          group_by(ComplexityHalves) %>%
-          summarise(
+          dplyr::group_by(ComplexityHalves) %>%
+          dplyr::summarise(
             mean_complexity = mean(Complexity),
             .groups = "drop"
           ) %>%
-          arrange(mean_complexity) %>%
-          pull(ComplexityHalves)
+          dplyr::arrange(mean_complexity) %>%
+          dplyr::pull(ComplexityHalves)
       }
 
       easy_levels <- get_halves(easy_stimuli_drum_matrix_filtered)
