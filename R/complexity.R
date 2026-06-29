@@ -11,7 +11,7 @@
 
 ##### Predict complexity function #####
 
-predict_complexity <- function (Si, M0, lambda = 3.56, C = 2.492082, D = -6.926637){
+predict_complexity <- function (Si, lambda = 3.56, C = 2.492082, D = -6.926637) {
 
   # Si = drum pattern, M0 = modes of prior distribution
 
@@ -35,6 +35,50 @@ predict_complexity <- function (Si, M0, lambda = 3.56, C = 2.492082, D = -6.9266
   gamma_i <- C*log(Ei) + D
   # Return gamma_i
   gamma_i
+}
+
+
+stimuli_df_to_matrix <- function(drum_matrix, stimulus_id) {
+
+  all_zeros <- matrix(0, nrow = 65, ncol = 3) %>%
+    as.data.frame() %>%
+    mutate(BeatPositionSixteenth = dplyr::row_number() ) %>%
+    rename(BD = V1, SD = V2, CY = V3)
+
+  stim <- drum_matrix %>%
+    dplyr::filter(Stimulus == stimulus_id) %>%
+    dplyr::select(Stimulus, BeatPositionSixteenth, Instrument)
+
+  stim_wide <- stim %>%
+    mutate(On = 1) %>%
+    pivot_wider(
+      names_from = Instrument,
+      values_from = On,
+      values_fill = 0
+    )
+
+  if(!"HiHat" %in% names(stim_wide)) {
+    stim_wide <- stim_wide %>% dplyr::mutate(HiHat = 0L)
+  }
+
+  if(!"Kick" %in% names(stim_wide)) {
+    stim_wide <- stim_wide %>% dplyr::mutate(Kick = 0L)
+  }
+
+  if(!"Snare" %in% names(stim_wide)) {
+    stim_wide <- stim_wide %>% dplyr::mutate(Snare = 0L)
+  }
+
+
+  mat <- all_zeros %>% dplyr::full_join(stim_wide, by = "BeatPositionSixteenth") %>%
+    mutate(BD = case_when (Kick == 1 ~ 1, TRUE ~ 0),
+           SD = case_when (Snare == 1 ~ 1, TRUE ~ 0),
+           CY = case_when (HiHat == 1 ~ 1, TRUE ~ 0) ) %>%
+    dplyr::select(BD, SD, CY) %>%
+    as.matrix()
+
+  return(mat)
+
 }
 
 

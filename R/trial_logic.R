@@ -1,6 +1,12 @@
 
 
-DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_drum_matrix = drum_matrix, show_solution = FALSE, with_feedback = TRUE) {
+DMT_page_loop <- function(trial_no,
+                          num_trials,
+                          tempo,
+                          demo = FALSE,
+                          stimulus_drum_matrix = drum_matrix,
+                          show_solution = FALSE,
+                          with_feedback = TRUE) {
 
   logging::loginfo("show_solution: %s", show_solution)
 
@@ -11,7 +17,28 @@ DMT_page_loop <- function(trial_no, num_trials, tempo, demo = FALSE, stimulus_dr
   psychTestR::join(
 
     psychTestR::code_block(function(state, ...) {
+
       psychTestR::set_local("attempt", 1L, state)
+
+
+      stimulus <- stimulus_drum_matrix %>%
+        dplyr::filter(TrialNo == trial_no)
+
+      stimulus_id <- stimulus %>%
+        dplyr::pull(Stimulus) %>%
+        unique()
+
+      logging::loginfo(
+        "trial=%i rows=%i ids=%s",
+        trial_no,
+        nrow(stimulus),
+        paste(unique(stimulus$Stimulus), collapse = ",")
+      )
+
+      psychTestR::set_local("trial_no", trial_no, state)
+      psychTestR::set_local("stimulus_id", stimulus_id, state)
+      psychTestR::set_local("demo", demo, state)
+
     }),
 
     psychTestR::while_loop(
@@ -115,100 +142,124 @@ DMT_trial_page <- function(trial_no,
   logging::loginfo("show_solution?? %s", show_solution)
 
   stimulus <- stimulus_drum_matrix %>%
-    dplyr::filter(Stimulus == trial_no)
+    dplyr::filter(TrialNo == trial_no)
+
+  stimulus_id <- stimulus %>%
+    dplyr::pull(Stimulus) %>%
+    unique()
 
   stimulus_json <- jsonlite::toJSON(stimulus, dataframe = "rows")
 
   ui <- shiny::tags$div(
-    dmt_ui(trial_no, num_trials, stimulus_json, tempo, feedback, show_solution, show_input_grid, show_play_buttons, demo),
+    dmt_ui(
+      trial_no,
+      stimulus_id,
+      num_trials,
+      stimulus_json,
+      tempo,
+      feedback,
+      show_solution,
+      show_input_grid,
+      show_play_buttons,
+      demo
+    ),
     psychTestR::trigger_button(
       "next",
       "Next",
-      onclick = if(show_solution)  "if(window.stopDMT){ window.stopDMT();resetSequencer();}" else "if(window.stopDMT){ window.stopDMT(); }"
+      onclick = if(show_solution)
+        "if(window.stopDMT){ window.stopDMT();resetSequencer();}"
+      else
+        "if(window.stopDMT){ window.stopDMT(); }"
     )
   )
 
+
   psychTestR::page(
-
     ui,
-
     label = paste0("DMT_trial_", trial_no, "_attempt_", attempt),
-
-    get_answer = if(show_solution) NULL else dmt_get_answer,
-
+    get_answer = if(show_solution) NULL else dmt_get_answer(stimulus_drum_matrix),
     save_answer = !show_solution
   )
+
+
 }
 
-dmt_get_answer <- function(input, ...) {
+dmt_get_answer <- function(drum_matrix) {
 
-  stim_no <- as.integer(input$stimulus_no)
-  is_demo <- isTRUE(input$demo)
+  function(input, state, ...) {
 
-  logging::loginfo("stim_no: %i | demo: %s", stim_no, is_demo)
+    trial_no    <- psychTestR::get_local("trial_no", state)
+    stimulus_id <- psychTestR::get_local("stimulus_id", state)
+    is_demo     <- psychTestR::get_local("demo", state)
 
-  if (is_demo) {
-    correct_answer <- easy_stimuli_drum_matrix %>%
-      dplyr::filter(Stimulus == !!stim_no) %>%
-      dplyr::select(Instrument, BeatPositionSixteenth)
-  } else {
-    correct_answer <- drum_matrix %>%
-      dplyr::filter(Stimulus == !!stim_no) %>%
-      dplyr::select(Instrument, BeatPositionSixteenth)
+
+    logging::loginfo("trial_no: %i | stimulus_id: %s | demo: %s", trial_no, stimulus_id, is_demo)
+
+    if (is_demo) {
+      correct_answer <- easy_stimuli_drum_matrix %>%
+        dplyr::filter(Stimulus == !!stimulus_id) %>%
+        dplyr::select(Instrument, BeatPositionSixteenth)
+
+    } else {
+      correct_answer <- drum_matrix %>%
+        dplyr::filter(Stimulus == !!stimulus_id) %>%
+        dplyr::select(Instrument, BeatPositionSixteenth)
+    }
+
+
+    if (length(input$sequencer_state) == 0) {
+      user_answer_df <- tibble::tibble()
+    } else {
+      user_answer_df <- matrix(unlist(input$sequencer_state), ncol = 3) %>%
+        tibble::as_tibble() %>%
+        dplyr::rename(HiHat = V1,
+                      Snare = V2,
+                      Kick = V3) %>%
+        dplyr::mutate(BeatPositionSixteenth = dplyr::row_number()) %>%
+        tidyr::pivot_longer(HiHat:Kick, names_to = "Instrument", values_to = "UserSelected")
+    }
+
+    if(length(user_answer_df) == 0L) {
+      # Case of no user entry
+      compare <- correct_answer %>%
+        dplyr::mutate(Correct = 0L,
+                      Mistake = 1L)
+
+    } else {
+      compare <- correct_answer %>%
+        dplyr::mutate(ShouldHaveSelected = TRUE) %>%
+        dplyr::full_join(user_answer_df,
+                         by = c("Instrument", "BeatPositionSixteenth")) %>%
+        dplyr::mutate(ShouldHaveSelected = dplyr::case_when(is.na(ShouldHaveSelected) ~ FALSE, TRUE ~ ShouldHaveSelected),
+                      Correct = ShouldHaveSelected & UserSelected == 1,
+                      Mistake = ShouldHaveSelected & UserSelected == 0 | !ShouldHaveSelected & UserSelected)
+
+    }
+
+    inst_levels <- c("HiHat", "Snare", "Kick")
+
+    res_summary <- compare %>%
+      dplyr::group_by(Instrument, .drop = FALSE) %>%
+      dplyr::summarise(
+        ProportionCorrect = mean(Correct, na.rm = TRUE),
+        NoMistakes = sum(Mistake, na.rm = TRUE),
+        .groups = "drop"
+      ) %>%
+      complete_instruments(inst_levels = inst_levels)
+
+
+    global_correct <- all(res_summary$NoMistakes == 0)
+
+    list(
+      res_summary = res_summary,
+      global_correct = global_correct,
+      correct_answer = correct_answer
+    )
   }
-
-
-  if (length(input$sequencer_state) == 0) {
-    user_answer_df <- tibble::tibble()
-  } else {
-    user_answer_df <- matrix(unlist(input$sequencer_state), ncol = 3) %>%
-      tibble::as_tibble() %>%
-      dplyr::rename(HiHat = V1,
-                    Snare = V2,
-                    Kick = V3) %>%
-      dplyr::mutate(BeatPositionSixteenth = dplyr::row_number()) %>%
-      tidyr::pivot_longer(HiHat:Kick, names_to = "Instrument", values_to = "UserSelected")
-  }
-
-  if(length(user_answer_df) == 0L) {
-    # Case of no user entry
-    compare <- correct_answer %>%
-      dplyr::mutate(Correct = 0L,
-                    Mistake = 1L)
-
-  } else {
-    compare <- correct_answer %>%
-      dplyr::mutate(ShouldHaveSelected = TRUE) %>%
-      dplyr::full_join(user_answer_df,
-                       by = c("Instrument", "BeatPositionSixteenth")) %>%
-      dplyr::mutate(ShouldHaveSelected = dplyr::case_when(is.na(ShouldHaveSelected) ~ FALSE, TRUE ~ ShouldHaveSelected),
-                    Correct = ShouldHaveSelected & UserSelected == 1,
-                    Mistake = ShouldHaveSelected & UserSelected == 0 | !ShouldHaveSelected & UserSelected)
-
-  }
-
-  inst_levels <- c("HiHat", "Snare", "Kick")
-
-  res_summary <- compare %>%
-    dplyr::group_by(Instrument, .drop = FALSE) %>%
-    dplyr::summarise(
-      ProportionCorrect = mean(Correct, na.rm = TRUE),
-      NoMistakes = sum(Mistake, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    complete_instruments(inst_levels = inst_levels)
-
-
-  global_correct <- all(res_summary$NoMistakes == 0)
-
-  list(
-    res_summary = res_summary,
-    global_correct = global_correct,
-    correct_answer = correct_answer
-  )
 }
 
 dmt_ui <- function(trial_no,
+                   stimulus_id,
                    num_trials,
                    stimulus_json,
                    tempo,
@@ -217,6 +268,14 @@ dmt_ui <- function(trial_no,
                    show_input_grid = TRUE,
                    show_play_buttons = TRUE,
                    demo = FALSE) {
+
+  print("dmt_ui")
+
+  print("trial_no")
+  print(trial_no)
+
+  print("stimulus_id")
+  print(stimulus_id)
 
 
   stopifnot(is.null(feedback) || all(dim(feedback) == c(2, 3)))
@@ -297,14 +356,9 @@ dmt_ui <- function(trial_no,
         '
     window.drumStimulus = %s;
     window.showSolution = %s;
-
-    Shiny.setInputValue("stimulus_no", %s, {priority: "event"});
-    Shiny.setInputValue("demo", %s, {priority: "event"});
     ',
         stimulus_json,
-        tolower(show_solution),
-        if(is.null(trial_no)) "" else trial_no,
-        tolower(demo)
+        tolower(show_solution)
       )
     ),
 

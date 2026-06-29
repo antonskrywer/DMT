@@ -67,26 +67,92 @@ drum_matrix <- drum_matrix %>%
   dplyr::filter(!Stimulus %in% c(5, 14)) %>%
   dplyr::rename(OriginalStimulusId = Stimulus) %>%
   dplyr::arrange(OriginalStimulusId) %>%
-  dplyr::mutate(Stimulus = dplyr::dense_rank(OriginalStimulusId))
+  dplyr::mutate(Stimulus = dplyr::dense_rank(OriginalStimulusId)) %>%
+  mutate( OriginalStimulusId = as.character(OriginalStimulusId),
+          Stimulus = as.character(Stimulus)
+          )
 
 
+# drum_matrix
 
 
-easy_stimuli_drum_matrix <- readr::read_csv("data-raw/Stimuli_Information/DMT_easy_stimuli.csv") %>%
-  dplyr::select(-1) %>%
-  dplyr::group_by(Stimulus) %>%
-  dplyr::mutate(BeatPositionSixteenth = row_number() ) %>%
+# Easy Stimuli
+
+easy_stimuli_drum_matrix <- readr::read_csv("data-raw/Stimuli_Information/DMT_easy_stimuli_all.csv") %>%
+  dplyr::group_by(pattern) %>%
+  dplyr::mutate(BeatPositionSixteenth = dplyr::row_number() ) %>%
   dplyr::ungroup()  %>%
+  pivot_longer(c(hihat, snare, bass), names_to = "Instrument", values_to = "Beats") %>%
   dplyr::mutate(
     Instrument = case_when(
-      Instrument == "SnareDrum" ~ "Snare",
-      Instrument == "BassDrum" ~ "Kick",
+      Instrument == "hihat" ~ "HiHat",
+      Instrument == "snare" ~ "Snare",
+      Instrument == "bass" ~ "Kick",
       TRUE ~ Instrument
     )
   ) %>%
-  dplyr::filter(Beats == 1)
+  dplyr::filter(Beats == 1) %>%
+  left_join(
+    readr::read_csv("data-raw/Stimuli_Information/DMT_easy_stimuli_complexity.csv") %>%
+      dplyr::select(-1),
+    by = "pattern"
+  ) %>%
+  rename(OriginalStimulusId = pattern,
+         Complexity = complexity) %>%
+  mutate(Stimulus = as.factor(OriginalStimulusId) ) %>% # Convert to and from factor to get numbered version
+  mutate(Stimulus = paste0("Easy_", as.integer(Stimulus) ) ) %>%
+  mutate(
+    Audiofile = NA,
+    Seconds = NA
+  ) %>%
+  relocate(OriginalStimulusId, Audiofile, Instrument, Seconds, Beats, BeatPositionSixteenth, Stimulus)
 
+# Predict complexities
+
+easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix |>
+  mutate(
+    Complexity = map_dbl(
+      Stimulus,
+      ~ tryCatch(predict_complexity(stimuli_df_to_matrix(easy_stimuli_drum_matrix, .x)), error = function(err) {
+          logging::logerror("Error: %s", err)
+          return(NA)
+      })
+    )
+  )
+
+
+drum_matrix <- drum_matrix |>
+  mutate(
+    Complexity = map_dbl(
+      Stimulus,
+      ~ tryCatch(predict_complexity(stimuli_df_to_matrix(drum_matrix, .x)), error = function(err) {
+        logging::logerror("Error: %s", err)
+        return(NA)
+      })
+    )
+  )
+
+
+complexities <- rbind(
+  easy_stimuli_drum_matrix %>% dplyr::select(Stimulus, Complexity) %>% mutate(Type = "Easy") %>% unique(),
+  drum_matrix %>% dplyr::select(Stimulus, Complexity) %>% mutate(Type = "Main") %>% unique()
+)
+
+complexities %>%
+  ggplot(aes(x = Complexity, group = Type, fill = Type)) +
+    geom_histogram() +
+    facet_wrap(~Type)
+
+
+# Compute halves bins
+easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
+  mutate(ComplexityHalves = paste0("Easy", cut_number(Complexity, n = 2)))
+
+drum_matrix <- drum_matrix %>%
+  mutate(ComplexityHalves = cut_number(Complexity, n = 2))
 
 
 usethis::use_data(drum_matrix, easy_stimuli_drum_matrix, overwrite = TRUE)
+
+rm(list = ls())
 

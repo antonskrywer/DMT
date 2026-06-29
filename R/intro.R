@@ -54,6 +54,7 @@ DMT_intro <- function(tempo) {
       ui = shiny::tags$div(
         dmt_ui_header(),
         dmt_ui(trial_no = NULL,
+               stimulus_id = NULL,
                num_trials = NULL,
                stimulus_json = NULL,
                tempo = tempo),
