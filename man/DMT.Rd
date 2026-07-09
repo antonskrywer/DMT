@@ -4,10 +4,18 @@
 \alias{DMT}
 \title{Embed Drum Machine Test in battery}
 \usage{
-DMT(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = TRUE)
+DMT(
+  num_trials = 5L,
+  tempo = 100,
+  num_examples = 3,
+  with_feedback = TRUE,
+  stratified_sampling = TRUE,
+  custom_stratified_sampling_allocation = NULL,
+  trial_timeout = 90
+)
 }
 \arguments{
-\item{with_feedback}{}
+\item{trial_timeout}{Trial timeout in seconds.}
 }
 \description{
 Embed Drum Machine Test in battery

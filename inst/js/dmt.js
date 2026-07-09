@@ -1,4 +1,5 @@
 
+
 window.resetDMT = function () {
   console.log("🔄 Resetting DMT state");
 
@@ -14,11 +15,6 @@ window.resetDMT = function () {
   }
 
   // ----------------------------
-  // Clear sequencer data
-  // ----------------------------
-  window.sequencerState = Array(16).fill(null).map(() => [0, 0, 0]);
-
-  // ----------------------------
   // Remove scheduled parts
   // ----------------------------
   if (window.part) {
@@ -31,26 +27,14 @@ window.resetDMT = function () {
   // ----------------------------
   // Reset UI grid
   // ----------------------------
-  document.querySelectorAll(".grid button").forEach(btn => {
-    btn.classList.remove("active");
+  document.querySelectorAll(".cell").forEach(cell => {
+    cell.classList.remove("active");
   });
 
-  // ----------------------------
-  // Clear Shiny input
-  // ----------------------------
-  if (window.Shiny) {
-    Shiny.setInputValue("sequencer_state", null, { priority: "event" });
-  }
 };
 
 window.initDMT = function () {
 
-  // --------------------------------------------------
-  // 🔁 HARD RESET (CLEAN + SAFE ORDER)
-  // --------------------------------------------------
-  if (window.resetDMT) {
-    window.resetDMT();
-  }
 
   // --------------------------------------------------
   // 🎯 READ TEMPO FROM SHINY
@@ -129,6 +113,42 @@ window.initDMT = function () {
   }
 
   buildGrid();
+
+
+  function loadSequencer(state) {
+
+    if (!state) return;
+
+    matrix = state;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+
+        if (matrix[r][c]) {
+          cells[r][c].classList.add("active");
+        } else {
+          cells[r][c].classList.remove("active");
+        }
+
+      }
+    }
+
+    if (window.Shiny) {
+      Shiny.setInputValue("sequencer_state", matrix, {priority: "event"});
+    }
+  }
+
+  // --------------------------------------------------
+  // 🔁 HARD RESET (CLEAN + SAFE ORDER)
+  // --------------------------------------------------
+  resetDMT();
+
+  console.log("initialSequencerState", window.initialSequencerState);
+
+  if (window.initialSequencerState !== null &&
+      window.initialSequencerState !== undefined) {
+    loadSequencer(window.initialSequencerState);
+  }
 
   // --------------------------------------------------
   // GRID ENABLE / DISABLE

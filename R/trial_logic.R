@@ -6,7 +6,8 @@ DMT_page_loop <- function(trial_no,
                           demo = FALSE,
                           stimulus_drum_matrix = drum_matrix,
                           show_solution = FALSE,
-                          with_feedback = TRUE) {
+                          with_feedback = TRUE,
+                          trial_timeout = NULL) {
 
   logging::loginfo("show_solution: %s", show_solution)
 
@@ -20,6 +21,7 @@ DMT_page_loop <- function(trial_no,
 
       psychTestR::set_local("attempt", 1L, state)
 
+      psychTestR::set_local("sequencer_state", NULL, state)
 
       stimulus <- stimulus_drum_matrix %>%
         dplyr::filter(TrialNo == trial_no)
@@ -51,6 +53,8 @@ DMT_page_loop <- function(trial_no,
 
           attempt <- psychTestR::get_local("attempt", state)
 
+          saved_state <- psychTestR::get_local("sequencer_state", state)
+
           DMT_trial_page(
             trial_no = trial_no,
             num_trials = num_trials,
@@ -58,7 +62,9 @@ DMT_page_loop <- function(trial_no,
             attempt = attempt,
             demo = demo,
             stimulus_drum_matrix = stimulus_drum_matrix,
-            show_solution = show_solution
+            show_solution = show_solution,
+            trial_timeout = trial_timeout,
+            initial_state = saved_state
           )
 
         }),
@@ -137,9 +143,12 @@ DMT_trial_page <- function(trial_no,
                            attempt = 1L,
                            show_play_buttons = TRUE,
                            stimulus_drum_matrix = drum_matrix,
-                           demo = FALSE) {
+                           demo = FALSE,
+                           trial_timeout = 90,
+                           initial_state = NULL) {
 
   logging::loginfo("show_solution?? %s", show_solution)
+  logging::loginfo("initial_state?? %s", initial_state)
 
   stimulus <- stimulus_drum_matrix %>%
     dplyr::filter(TrialNo == trial_no)
@@ -161,7 +170,9 @@ DMT_trial_page <- function(trial_no,
       show_solution,
       show_input_grid,
       show_play_buttons,
-      demo
+      demo,
+      trial_timeout,
+      initial_state
     ),
     psychTestR::trigger_button(
       "next",
@@ -188,15 +199,22 @@ dmt_get_answer <- function(drum_matrix) {
 
   function(input, state, ...) {
 
+    psychTestR::set_local(
+      "sequencer_state",
+      input$sequencer_state,
+      state
+    )
+
     trial_no    <- psychTestR::get_local("trial_no", state)
     stimulus_id <- psychTestR::get_local("stimulus_id", state)
     is_demo     <- psychTestR::get_local("demo", state)
+    timed_out <- isTRUE(input$dmtTimedOut)
 
 
     logging::loginfo("trial_no: %i | stimulus_id: %s | demo: %s", trial_no, stimulus_id, is_demo)
 
     if (is_demo) {
-      correct_answer <- easy_stimuli_drum_matrix %>%
+      correct_answer <- demo_drum_matrix %>%
         dplyr::filter(Stimulus == !!stimulus_id) %>%
         dplyr::select(Instrument, BeatPositionSixteenth)
 
@@ -253,7 +271,8 @@ dmt_get_answer <- function(drum_matrix) {
     list(
       res_summary = res_summary,
       global_correct = global_correct,
-      correct_answer = correct_answer
+      correct_answer = correct_answer,
+      timed_out = timed_out
     )
   }
 }
@@ -267,16 +286,23 @@ dmt_ui <- function(trial_no,
                    show_solution = FALSE,
                    show_input_grid = TRUE,
                    show_play_buttons = TRUE,
-                   demo = FALSE) {
+                   demo = FALSE,
+                   trial_timeout = 90,
+                   initial_state = NULL) {
 
-  print("dmt_ui")
 
-  print("trial_no")
-  print(trial_no)
+  initial_state_json <-
+    if (is.null(initial_state)) {
+      "null"
+    } else {
 
-  print("stimulus_id")
-  print(stimulus_id)
-
+      initial_state <- list(
+        initial_state[1:16],
+        initial_state[17:32],
+        initial_state[33:48]
+      )
+      jsonlite::toJSON(initial_state, auto_unbox = TRUE)
+    }
 
   stopifnot(is.null(feedback) || all(dim(feedback) == c(2, 3)))
 
@@ -341,11 +367,22 @@ dmt_ui <- function(trial_no,
   )
 
   shiny::tags$div(
+
+    # Timeout trials after N seconds
+    timeout_js(show_solution, trial_timeout),
+
     # ------------------------------------------------------------
     # HEADER
     # ------------------------------------------------------------
 
     dmt_ui_header(),
+
+    shiny::tags$script(sprintf(
+      "
+      window.initialSequencerState = %s;
+      ",
+            initial_state_json
+          )),
 
     # ------------------------------------------------------------
     # STIMULUS + TRIAL
@@ -435,4 +472,27 @@ complete_instruments <- function(res_summary,
       Instrument = factor(Instrument, levels = inst_levels)
     ) %>%
     dplyr::arrange(Instrument)
+}
+
+
+timeout_js <- function(show_solution, trial_timeout) {
+  if (!show_solution && !is.null(trial_timeout))
+    shiny::tags$script(sprintf("
+      clearTimeout(window.dmtTrialTimeout);
+
+      window.dmtTrialTimeout = setTimeout(function(){
+
+        // stop playback
+        if(window.stopDMT){
+          window.stopDMT();
+        }
+
+        window.dmtTimedOut = true;
+
+        // submit page
+        document.getElementById('next').click();
+
+      }, %i);
+
+    ", trial_timeout * 1000))
 }

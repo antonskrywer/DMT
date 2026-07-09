@@ -49,4 +49,9 @@ is.null.or <- function(x, f) {
   is.null(x) || f(x)
 }
 
+check_sampling_allocation <- function(custom_stratified_sampling_allocation) {
+  length(setdiff(names(custom_stratified_sampling_allocation),
+                 c("easy_easy", "easy_hard", "normal_easy", "normal_hard") )
+  ) == 0
+}
 

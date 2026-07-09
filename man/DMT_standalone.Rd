@@ -8,11 +8,14 @@ DMT_standalone(
   tempo = 100,
   num_trials = 5L,
   num_examples = 3,
-  with_feedback = TRUE
+  with_feedback = TRUE,
+  stratified_sampling = TRUE,
+  custom_stratified_sampling_allocation = NULL,
+  trial_timeout = 90
 )
 }
 \arguments{
-\item{with_feedback}{}
+\item{trial_timeout}{}
 }
 \description{
 Standalone Drum Machine Test

@@ -152,7 +152,44 @@ drum_matrix <- drum_matrix %>%
   mutate(ComplexityHalves = cut_number(Complexity, n = 2))
 
 
-usethis::use_data(drum_matrix, easy_stimuli_drum_matrix, overwrite = TRUE)
+demo_drum_matrix <- read_csv("data-raw/Stimuli_Information/DMT_instruction_stimuli.csv") %>%
+  dplyr::select(-1) %>%
+  dplyr::rename(BeatPositionSixteenth =Beat) %>%
+  pivot_longer(c(hihat, snare, bass), names_to = "Instrument", values_to = "Beats") %>%
+  dplyr::mutate(
+    Instrument = case_when(
+      Instrument == "hihat" ~ "HiHat",
+      Instrument == "snare" ~ "Snare",
+      Instrument == "bass" ~ "Kick",
+      TRUE ~ Instrument
+    )
+  ) %>%
+  mutate(OriginalStimulusId = Stimulus) %>%
+  filter(Beats == 1)
+
+demo_drum_matrix <- demo_drum_matrix %>%
+  mutate(
+    Complexity = map_dbl(
+      Stimulus,
+      ~ tryCatch(predict_complexity(stimuli_df_to_matrix(demo_drum_matrix, .x)), error = function(err) {
+        logging::logerror("Error: %s", err)
+        return(NA)
+      })
+    )
+  ) %>%
+  mutate(Stimulus = as.factor(OriginalStimulusId) ) %>% # Convert to and from factor to get numbered version
+  mutate(Stimulus = paste0("Easy_", as.integer(Stimulus) ) ) %>%
+  mutate(
+    Audiofile = NA,
+    Seconds = NA
+  ) %>%
+  relocate(OriginalStimulusId, Audiofile, Instrument, Seconds, Beats, BeatPositionSixteenth, Stimulus) %>%
+  mutate(TrialNo = as.integer(as.factor(OriginalStimulusId)))
+
+easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
+  filter(!Stimulus %in% unique(paste0("Easy_", demo_drum_matrix$OriginalStimulusId)) )
+
+usethis::use_data(drum_matrix, easy_stimuli_drum_matrix, demo_drum_matrix, overwrite = TRUE)
 
 rm(list = ls())
 

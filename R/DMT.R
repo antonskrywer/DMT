@@ -7,6 +7,8 @@
 #' @param num_trials
 #' @param num_examples
 #' @param with_feedback
+#' @param custom_stratified_sampling_allocation
+#' @param trial_timeout
 #'
 #' @returns
 #' @export
@@ -16,12 +18,17 @@ DMT_standalone <- function(tempo = 100,
                            num_trials = 5L,
                            num_examples = 3,
                            with_feedback = TRUE,
-                           stratified_sampling = TRUE) {
+                           stratified_sampling = TRUE,
+                           custom_stratified_sampling_allocation = NULL,
+                           trial_timeout = 90) {
   DMT(tempo = tempo,
       num_trials = num_trials,
       num_examples = num_examples,
       with_feedback = with_feedback,
-      stratified_sampling = stratified_sampling) %>%
+      stratified_sampling = stratified_sampling,
+      custom_stratified_sampling_allocation = custom_stratified_sampling_allocation,
+      trial_timeout = trial_timeout
+      ) %>%
     psychTestR::make_test(
       opt = psychTestR::test_options(
         title = "Drum Machine Test",
@@ -39,36 +46,28 @@ DMT_standalone <- function(tempo = 100,
 #' @param tempo
 #' @param num_examples
 #' @param with_feedback
+#' @param custom_stratified_sampling_allocation
+#' @param trial_timeout Trial timeout in seconds.
 #'
 #' @returns
 #' @export
 #'
 #' @examples
-DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = TRUE, stratified_sampling = TRUE) {
+DMT <- function(num_trials = 5L,
+                tempo = 100,
+                num_examples = 3,
+                with_feedback = TRUE,
+                stratified_sampling = TRUE,
+                custom_stratified_sampling_allocation = NULL,
+                trial_timeout = 90) {
 
-  # We keep N trials for examples
 
-  demo_ids <- paste0("Easy_", as.character(1:num_examples))
-
-  demo_drum_matrix <- easy_stimuli_drum_matrix %>%
-    dplyr::filter(Stimulus %in% demo_ids) %>%
-    dplyr::mutate(TrialNo = as.integer(stringr::str_remove(Stimulus, 	"Easy_")))
-
-  # Then make sure these aren't in the remaining east set
-
-  easy_stimuli_drum_matrix_filtered <- easy_stimuli_drum_matrix %>%
-    dplyr::filter(!Stimulus %in% 1:num_examples)
-
-  # Then add these easy trials to the set from Senn et al.
-
-  filtered_drum_matrix <-
-    rbind(
-      easy_stimuli_drum_matrix_filtered,
-      drum_matrix
-    )
+  if(!is.null(custom_stratified_sampling_allocation) && sum(unlist(custom_stratified_sampling_allocation)) != num_trials) {
+    stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
+  }
 
   # Label
-  easy_stimuli_drum_matrix_filtered <- easy_stimuli_drum_matrix_filtered %>%
+  easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
     dplyr::mutate(Source = "easy")
 
   drum_matrix <- drum_matrix %>%
@@ -103,7 +102,7 @@ DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = 
           dplyr::pull(ComplexityHalves)
       }
 
-      easy_levels <- get_halves(easy_stimuli_drum_matrix_filtered)
+      easy_levels <- get_halves(easy_stimuli_drum_matrix)
       normal_levels <- get_halves(drum_matrix)
 
       easy_easy   <- easy_levels[1]
@@ -116,42 +115,46 @@ DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = 
       n_per_group <- floor(num_trials / 4)
       remainder   <- num_trials %% 4
 
-      allocation <- c(
+      allocation <- list(
         easy_easy   = n_per_group,
         easy_hard   = n_per_group,
         normal_easy = n_per_group,
         normal_hard = n_per_group
       )
 
+      if(check_sampling_allocation(custom_stratified_sampling_allocation)) {
+        allocation <- custom_stratified_sampling_allocation
+      }
+
       # Give leftovers to the easy dataset
-      if (remainder >= 1) allocation["easy_easy"] <- allocation["easy_easy"] + 1
-      if (remainder >= 2) allocation["easy_hard"] <- allocation["easy_hard"] + 1
-      if (remainder >= 3) allocation["easy_easy"] <- allocation["easy_easy"] + 1
+      if (remainder >= 1) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
+      if (remainder >= 2) allocation[["easy_hard"]] <- allocation[["easy_hard"]] + 1
+      if (remainder >= 3) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
 
       sampled_drum_matrix <- dplyr::bind_rows(
 
         sample_stratum(
-          easy_stimuli_drum_matrix_filtered,
+          easy_stimuli_drum_matrix,
           easy_easy,
-          allocation["easy_easy"]
+          allocation[["easy_easy"]]
         ),
 
         sample_stratum(
-          easy_stimuli_drum_matrix_filtered,
+          easy_stimuli_drum_matrix,
           easy_hard,
-          allocation["easy_hard"]
+          allocation[["easy_hard"]]
         ),
 
         sample_stratum(
           drum_matrix,
           normal_easy,
-          allocation["normal_easy"]
+          allocation[["normal_easy"]]
         ),
 
         sample_stratum(
           drum_matrix,
           normal_hard,
-          allocation["normal_hard"]
+          allocation[["normal_hard"]]
         )
 
       )
@@ -189,28 +192,28 @@ DMT <- function(num_trials = 5L, tempo = 100, num_examples = 3, with_feedback = 
     # Intro
     DMT_intro(tempo),
 
-    if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback, demo_drum_matrix_filtered = demo_drum_matrix),
+    if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback),
 
     psychTestR::one_button_page("Now you're ready for the real thing. Good luck!"),
 
     # Main Trials
-    DMT_main_trials(num_trials, tempo, with_feedback, drum_matrix),
+    DMT_main_trials(num_trials, tempo, with_feedback, drum_matrix, trial_timeout),
 
     psychTestR::final_page("You have finished the Drum Machine Test!")
   )
 }
 
 
-DMT_main_trials <- function(num_trials, tempo, with_feedback, drum_matrix) {
-  purrr::map(1:num_trials, ~ DMT_page_loop(.x, num_trials, tempo, with_feedback = with_feedback, stimulus_drum_matrix = drum_matrix)) %>% unlist()
+DMT_main_trials <- function(num_trials, tempo, with_feedback, drum_matrix, trial_timeout = 90) {
+  purrr::map(1:num_trials, ~ DMT_page_loop(.x, num_trials, tempo, with_feedback = with_feedback, stimulus_drum_matrix = drum_matrix, trial_timeout = trial_timeout)) %>% unlist()
 }
 
-DMT_training <- function(num_examples, tempo, with_feedback, demo_drum_matrix_filtered) {
-  purrr::map(1:num_examples, ~ DMT_demo_loop(.x, num_examples, tempo, with_feedback = with_feedback, demo_drum_matrix = demo_drum_matrix_filtered)) %>% unlist()
+DMT_training <- function(num_examples, tempo, with_feedback) {
+  purrr::map(1:num_examples, ~ DMT_demo_loop(.x, num_examples, tempo, with_feedback = with_feedback)) %>% unlist()
 }
 
 
-DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE, demo_drum_matrix_filtered) {
+DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE) {
 
   psychTestR::join(
 
@@ -221,7 +224,7 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE, d
 
       psychTestR::set_local("attempt", 1L, state)
 
-      stimulus <- demo_drum_matrix_filtered %>%
+      stimulus <- demo_drum_matrix %>%
         dplyr::filter(TrialNo == trial_no)
 
       stimulus_id <- stimulus %>%
@@ -248,14 +251,14 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE, d
       tempo = tempo,
       attempt = 0L,
       demo = TRUE,
-      stimulus_drum_matrix = demo_drum_matrix_filtered,
+      stimulus_drum_matrix = demo_drum_matrix,
       show_solution = TRUE
     ),
 
     one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = "Now enter the pattern you just saw."),
 
     # Get user to enter it
-    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix_filtered, with_feedback = with_feedback)
+    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix, with_feedback = with_feedback)
 
   ) %>% unlist()
 }
