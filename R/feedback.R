@@ -1,6 +1,6 @@
 
 
-DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = FALSE) {
+DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = FALSE, stratified_sampling = TRUE) {
 
   psychTestR::reactive_page(function(state, answer, ...) {
 
@@ -11,6 +11,10 @@ DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo
                                trial_no, num_trials, tempo)
 
     show_solution <- feedback_layer == 4 && !answer$global_correct
+
+    if(stratified_sampling) {
+      stimulus_drum_matrix <- psychTestR::get_global("sampled_trials", state)
+    }
 
     DMT_trial_page(
       trial_no,

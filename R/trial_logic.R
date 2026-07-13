@@ -7,13 +7,18 @@ DMT_page_loop <- function(trial_no,
                           stimulus_drum_matrix = drum_matrix,
                           show_solution = FALSE,
                           with_feedback = TRUE,
-                          trial_timeout = NULL) {
+                          trial_timeout = NULL,
+                          stratified_sampling = TRUE) {
+
+  logging::loginfo("trial_no: %s", trial_no)
 
   logging::loginfo("show_solution: %s", show_solution)
 
   logging::loginfo("with_feedback: %s", with_feedback)
 
   logging::loginfo("!show_solution && with_feedback: %s", !show_solution && with_feedback )
+
+  logging::loginfo("stratified_sampling: %s", stratified_sampling)
 
   psychTestR::join(
 
@@ -23,8 +28,21 @@ DMT_page_loop <- function(trial_no,
 
       psychTestR::set_local("sequencer_state", NULL, state)
 
-      stimulus <- stimulus_drum_matrix %>%
-        dplyr::filter(TrialNo == trial_no)
+      if(stratified_sampling) {
+
+        dynamic_drum_matrix <- psychTestR::get_global("sampled_trials", state)
+
+        stimulus <- dynamic_drum_matrix %>%
+          dplyr::filter(TrialNo == trial_no)
+
+      } else {
+
+        stimulus <- stimulus_drum_matrix %>%
+          dplyr::filter(TrialNo == trial_no)
+
+      }
+
+
 
       stimulus_id <- stimulus %>%
         dplyr::pull(Stimulus) %>%
@@ -55,6 +73,12 @@ DMT_page_loop <- function(trial_no,
 
           saved_state <- psychTestR::get_local("sequencer_state", state)
 
+          if(stratified_sampling) {
+
+            stimulus_drum_matrix <- psychTestR::get_global("sampled_trials", state)
+
+          }
+
           DMT_trial_page(
             trial_no = trial_no,
             num_trials = num_trials,
@@ -64,14 +88,15 @@ DMT_page_loop <- function(trial_no,
             stimulus_drum_matrix = stimulus_drum_matrix,
             show_solution = show_solution,
             trial_timeout = trial_timeout,
-            initial_state = saved_state
+            initial_state = saved_state,
+            stratified_sampling = stratified_sampling
           )
 
         }),
 
         # Feedback
 
-        if (with_feedback && !show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo),
+        if (with_feedback && !show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo, stratified_sampling = stratified_sampling),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -145,7 +170,8 @@ DMT_trial_page <- function(trial_no,
                            stimulus_drum_matrix = drum_matrix,
                            demo = FALSE,
                            trial_timeout = 90,
-                           initial_state = NULL) {
+                           initial_state = NULL,
+                           stratified_sampling = TRUE) {
 
   logging::loginfo("show_solution?? %s", show_solution)
   logging::loginfo("initial_state?? %s", initial_state)
@@ -188,14 +214,14 @@ DMT_trial_page <- function(trial_no,
   psychTestR::page(
     ui,
     label = paste0("DMT_trial_", trial_no, "_attempt_", attempt),
-    get_answer = if(show_solution) NULL else dmt_get_answer(stimulus_drum_matrix),
+    get_answer = if(show_solution) NULL else dmt_get_answer(stimulus_drum_matrix, stratified_sampling),
     save_answer = !show_solution
   )
 
 
 }
 
-dmt_get_answer <- function(drum_matrix) {
+dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
   function(input, state, ...) {
 
@@ -204,6 +230,13 @@ dmt_get_answer <- function(drum_matrix) {
       input$sequencer_state,
       state
     )
+
+    logging::loginfo("dmt_get_answer stratified_sampling: %s", stratified_sampling)
+
+    # If dynamic, use dynamically sampled drum matrix
+    if(stratified_sampling) {
+      drum_matrix <- psychTestR::get_global("sampled_trials", state)
+    }
 
     trial_no    <- psychTestR::get_local("trial_no", state)
     stimulus_id <- psychTestR::get_local("stimulus_id", state)

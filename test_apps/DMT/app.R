@@ -13,7 +13,8 @@ devtools::load_all(".")
 
 DMT_standalone(tempo = 100,
                num_trials = 7L,
-               num_examples = 3L,
+               # num_examples = 3L,
+               num_examples = 0L,
                with_feedback = TRUE,
                custom_stratified_sampling_allocation = list(
                  easy_easy = 2,

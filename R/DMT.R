@@ -66,122 +66,15 @@ DMT <- function(num_trials = 5L,
     stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
   }
 
-  # Label
+  # If static test:
   easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
     dplyr::mutate(Source = "easy")
 
   drum_matrix <- drum_matrix %>%
     dplyr::mutate(Source = "normal")
 
-  if(stratified_sampling) {
-
-    sample_stratum <- function(dat, half_label, n) {
-
-      stimuli <- dat %>%
-        dplyr::filter(ComplexityHalves == half_label) %>%
-        dplyr::distinct(Stimulus)
-
-      selected <- stimuli %>%
-        dplyr::slice_sample(n = min(n, nrow(stimuli)))
-
-      dat %>%
-        dplyr::semi_join(selected, by = "Stimulus")
-    }
-
-    if (stratified_sampling) {
-
-      # labels for each dataset
-      get_halves <- function(dat) {
-        dat %>%
-          dplyr::group_by(ComplexityHalves) %>%
-          dplyr::summarise(
-            mean_complexity = mean(Complexity),
-            .groups = "drop"
-          ) %>%
-          dplyr::arrange(mean_complexity) %>%
-          dplyr::pull(ComplexityHalves)
-      }
-
-      easy_levels <- get_halves(easy_stimuli_drum_matrix)
-      normal_levels <- get_halves(drum_matrix)
-
-      easy_easy   <- easy_levels[1]
-      easy_hard   <- easy_levels[2]
-
-      normal_easy <- normal_levels[1]
-      normal_hard <- normal_levels[2]
-
-      # Base allocation
-      n_per_group <- floor(num_trials / 4)
-      remainder   <- num_trials %% 4
-
-      allocation <- list(
-        easy_easy   = n_per_group,
-        easy_hard   = n_per_group,
-        normal_easy = n_per_group,
-        normal_hard = n_per_group
-      )
-
-      if(check_sampling_allocation(custom_stratified_sampling_allocation)) {
-        allocation <- custom_stratified_sampling_allocation
-      }
-
-      # Give leftovers to the easy dataset
-      if (remainder >= 1) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
-      if (remainder >= 2) allocation[["easy_hard"]] <- allocation[["easy_hard"]] + 1
-      if (remainder >= 3) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
-
-      sampled_drum_matrix <- dplyr::bind_rows(
-
-        sample_stratum(
-          easy_stimuli_drum_matrix,
-          easy_easy,
-          allocation[["easy_easy"]]
-        ),
-
-        sample_stratum(
-          easy_stimuli_drum_matrix,
-          easy_hard,
-          allocation[["easy_hard"]]
-        ),
-
-        sample_stratum(
-          drum_matrix,
-          normal_easy,
-          allocation[["normal_easy"]]
-        ),
-
-        sample_stratum(
-          drum_matrix,
-          normal_hard,
-          allocation[["normal_hard"]]
-        )
-
-      )
-
-      logging::loginfo(
-        "Sampled %s items via stratified sampling!",
-        dplyr::n_distinct(sampled_drum_matrix$Stimulus)
-      )
-
-      sampled_drum_matrix %>%
-        dplyr::distinct(Stimulus, Source, ComplexityHalves) %>%
-        dplyr::count(ComplexityHalves) %>%
-        print()
-    }
-
-    # Randomise and trial no
-    trial_order <- sampled_drum_matrix %>%
-      dplyr::distinct(Stimulus) %>%
-      dplyr::mutate(TrialNo = sample(dplyr::n()))
-
-    sampled_drum_matrix <- sampled_drum_matrix %>%
-      dplyr::left_join(trial_order, by = "Stimulus") %>%
-      dplyr::arrange(TrialNo)
-
-    drum_matrix <- sampled_drum_matrix
-
-  }
+  full_drum_matrix <- dplyr::bind_rows(easy_stimuli_drum_matrix, drum_matrix) %>%
+    dplyr::mutate(TrialNo = dplyr::row_number())
 
 
   # Setup resource paths
@@ -196,16 +89,25 @@ DMT <- function(num_trials = 5L,
 
     psychTestR::one_button_page("Now you're ready for the real thing. Good luck!"),
 
+    # Sample main trials
+    if(stratified_sampling) sample_trials(num_trials, custom_stratified_sampling_allocation),
+
     # Main Trials
-    DMT_main_trials(num_trials, tempo, with_feedback, drum_matrix, trial_timeout),
+    DMT_main_trials(num_trials, tempo, with_feedback, trial_timeout, stratified_sampling, full_drum_matrix),
 
     psychTestR::final_page("You have finished the Drum Machine Test!")
   )
 }
 
 
-DMT_main_trials <- function(num_trials, tempo, with_feedback, drum_matrix, trial_timeout = 90) {
-  purrr::map(1:num_trials, ~ DMT_page_loop(.x, num_trials, tempo, with_feedback = with_feedback, stimulus_drum_matrix = drum_matrix, trial_timeout = trial_timeout)) %>% unlist()
+DMT_main_trials <- function(num_trials, tempo, with_feedback, trial_timeout = 90, stratified_sampling, drum_matrix) {
+  purrr::map(1:num_trials, ~ DMT_page_loop(trial_no = .x,
+                                           num_trials = num_trials,
+                                           tempo = tempo,
+                                           with_feedback = with_feedback,
+                                           trial_timeout = trial_timeout,
+                                           stratified_sampling = stratified_sampling,
+                                           stimulus_drum_matrix = drum_matrix)) %>% unlist()
 }
 
 DMT_training <- function(num_examples, tempo, with_feedback) {
@@ -273,5 +175,127 @@ one_button_page_trial_no <- function(trial_no, num_trials, text, demo = FALSE) {
   )
 }
 
+
+sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
+  psychTestR::code_block(function(state, ...) {
+
+    # Label
+    easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
+      dplyr::mutate(Source = "easy")
+
+    drum_matrix <- drum_matrix %>%
+      dplyr::mutate(Source = "normal")
+
+    sample_stratum <- function(dat, half_label, n) {
+
+      stimuli <- dat %>%
+        dplyr::filter(ComplexityHalves == half_label) %>%
+        dplyr::distinct(Stimulus)
+
+      selected <- stimuli %>%
+        dplyr::slice_sample(n = min(n, nrow(stimuli)))
+
+      dat %>%
+        dplyr::semi_join(selected, by = "Stimulus")
+    }
+
+    # labels for each dataset
+    get_halves <- function(dat) {
+      dat %>%
+        dplyr::group_by(ComplexityHalves) %>%
+        dplyr::summarise(
+          mean_complexity = mean(Complexity),
+          .groups = "drop"
+        ) %>%
+        dplyr::arrange(mean_complexity) %>%
+        dplyr::pull(ComplexityHalves)
+    }
+
+    easy_levels <- get_halves(easy_stimuli_drum_matrix)
+    normal_levels <- get_halves(drum_matrix)
+
+    easy_easy   <- easy_levels[1]
+    easy_hard   <- easy_levels[2]
+
+    normal_easy <- normal_levels[1]
+    normal_hard <- normal_levels[2]
+
+    # Base allocation
+    n_per_group <- floor(num_trials / 4)
+    remainder   <- num_trials %% 4
+
+
+
+    if(check_sampling_allocation(custom_stratified_sampling_allocation)) {
+      allocation <- custom_stratified_sampling_allocation
+    } else {
+
+      allocation <- list(
+        easy_easy   = n_per_group,
+        easy_hard   = n_per_group,
+        normal_easy = n_per_group,
+        normal_hard = n_per_group
+      )
+
+      # Give leftovers to the easy dataset
+      if (remainder >= 1) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
+      if (remainder >= 2) allocation[["easy_hard"]] <- allocation[["easy_hard"]] + 1
+      if (remainder >= 3) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
+
+
+    }
+
+
+    sampled_drum_matrix <- dplyr::bind_rows(
+
+      sample_stratum(
+        easy_stimuli_drum_matrix,
+        easy_easy,
+        allocation[["easy_easy"]]
+      ),
+
+      sample_stratum(
+        easy_stimuli_drum_matrix,
+        easy_hard,
+        allocation[["easy_hard"]]
+      ),
+
+      sample_stratum(
+        drum_matrix,
+        normal_easy,
+        allocation[["normal_easy"]]
+      ),
+
+      sample_stratum(
+        drum_matrix,
+        normal_hard,
+        allocation[["normal_hard"]]
+      )
+
+    )
+
+    logging::loginfo(
+      "Sampled %s items via stratified sampling!",
+      dplyr::n_distinct(sampled_drum_matrix$Stimulus)
+    )
+
+    sampled_drum_matrix %>%
+      dplyr::distinct(Stimulus, Source, ComplexityHalves) %>%
+      dplyr::count(ComplexityHalves) %>%
+      print()
+
+    # Randomise and trial no
+    trial_order <- sampled_drum_matrix %>%
+      dplyr::distinct(Stimulus) %>%
+      dplyr::mutate(TrialNo = sample(dplyr::n()))
+
+    sampled_drum_matrix <- sampled_drum_matrix %>%
+      dplyr::left_join(trial_order, by = "Stimulus") %>%
+      dplyr::arrange(TrialNo)
+
+    psychTestR::set_global("sampled_trials", sampled_drum_matrix, state)
+
+  })
+}
 
 
