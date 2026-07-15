@@ -12,7 +12,7 @@ DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo
 
     show_solution <- feedback_layer == 4 && !answer$global_correct
 
-    if(stratified_sampling) {
+    if(stratified_sampling && !demo) {
       stimulus_drum_matrix <- psychTestR::get_global("sampled_trials", state)
     }
 

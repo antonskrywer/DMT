@@ -28,7 +28,7 @@ DMT_page_loop <- function(trial_no,
 
       psychTestR::set_local("sequencer_state", NULL, state)
 
-      if(stratified_sampling) {
+      if(stratified_sampling && !demo) {
 
         dynamic_drum_matrix <- psychTestR::get_global("sampled_trials", state)
 
@@ -73,7 +73,7 @@ DMT_page_loop <- function(trial_no,
 
           saved_state <- psychTestR::get_local("sequencer_state", state)
 
-          if(stratified_sampling) {
+          if(stratified_sampling && !demo) {
 
             stimulus_drum_matrix <- psychTestR::get_global("sampled_trials", state)
 
