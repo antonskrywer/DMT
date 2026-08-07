@@ -11,11 +11,13 @@ DMT_standalone(
   with_feedback = TRUE,
   stratified_sampling = TRUE,
   custom_stratified_sampling_allocation = NULL,
-  trial_timeout = 90
+  trial_timeout = 90,
+  language = "en"
 )
 }
 \arguments{
-\item{trial_timeout}{}
+\item{language}{Scalar character, one of DMT_languages() (currently
+"en", "de", "de_f"). Fixes the standalone test to exactly this language.}
 }
 \description{
 Standalone Drum Machine Test

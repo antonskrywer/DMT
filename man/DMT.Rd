@@ -11,11 +11,16 @@ DMT(
   with_feedback = TRUE,
   stratified_sampling = TRUE,
   custom_stratified_sampling_allocation = NULL,
-  trial_timeout = 90
+  trial_timeout = 90,
+  language = "en"
 )
 }
 \arguments{
 \item{trial_timeout}{Trial timeout in seconds.}
+
+\item{language}{Scalar character, one of DMT_languages() (currently
+"en", "de", "de_f"). Fixes the test to exactly this language — no other
+language is reachable in the resulting timeline, not even via URL param.}
 }
 \description{
 Embed Drum Machine Test in battery

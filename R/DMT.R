@@ -1,6 +1,3 @@
-
-
-
 #' Standalone Drum Machine Test
 #'
 #' @param tempo
@@ -9,6 +6,8 @@
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
 #' @param trial_timeout
+#' @param language Scalar character, one of DMT_languages() (currently
+#' "en", "de", "de_f"). Fixes the standalone test to exactly this language.
 #'
 #' @returns
 #' @export
@@ -20,20 +19,23 @@ DMT_standalone <- function(tempo = 100,
                            with_feedback = TRUE,
                            stratified_sampling = TRUE,
                            custom_stratified_sampling_allocation = NULL,
-                           trial_timeout = 90) {
+                           trial_timeout = 90,
+                           language = "en") {
   DMT(tempo = tempo,
       num_trials = num_trials,
       num_examples = num_examples,
       with_feedback = with_feedback,
       stratified_sampling = stratified_sampling,
       custom_stratified_sampling_allocation = custom_stratified_sampling_allocation,
-      trial_timeout = trial_timeout
-      ) %>%
+      trial_timeout = trial_timeout,
+      language = language
+  ) %>%
     psychTestR::make_test(
       opt = psychTestR::test_options(
         title = "Drum Machine Test",
         admin_password = "test",
         researcher_email = "sebastian.silas@uni_hamburg.de",
+        languages = language,
         display = psychTestR::display_options(full_screen = TRUE),
         additional_scripts = "https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"
       )
@@ -48,6 +50,9 @@ DMT_standalone <- function(tempo = 100,
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
 #' @param trial_timeout Trial timeout in seconds.
+#' @param language Scalar character, one of DMT_languages() (currently
+#' "en", "de", "de_f"). Fixes the test to exactly this language — no other
+#' language is reachable in the resulting timeline, not even via URL param.
 #'
 #' @returns
 #' @export
@@ -59,7 +64,8 @@ DMT <- function(num_trials = 5L,
                 with_feedback = TRUE,
                 stratified_sampling = TRUE,
                 custom_stratified_sampling_allocation = NULL,
-                trial_timeout = 90) {
+                trial_timeout = 90,
+                language = "en") {
 
 
   if(!is.null(custom_stratified_sampling_allocation) && sum(unlist(custom_stratified_sampling_allocation)) != num_trials) {
@@ -80,25 +86,33 @@ DMT <- function(num_trials = 5L,
   # Setup resource paths
   dmt_resources()
 
-  psychTestR::join(
+  # Reduce DMT_dict to just the requested language (see DMT_dict_for_language()
+  # above) - new_timeline() will then build the test for this one language only.
+  dict <- DMT_dict_for_language(DMT_dict, language)
 
-    # Intro
-    DMT_intro(tempo),
+  psychTestR::new_timeline(
 
-    if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback),
+    psychTestR::join(
 
-    psychTestR::one_button_page("Now you're ready for the real thing. Good luck!"),
+      # Intro
+      DMT_intro(tempo),
 
-    # Sample main trials
-    if(stratified_sampling) sample_trials(num_trials, custom_stratified_sampling_allocation),
+      if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback),
 
-    # Main Trials
-    DMT_main_trials(num_trials, tempo, with_feedback, trial_timeout, stratified_sampling, full_drum_matrix),
+      psychTestR::one_button_page(psychTestR::i18n("READY_MESSAGE"), button_text = psychTestR::i18n("CONTINUE")),
 
-    psychTestR::final_page("You have finished the Drum Machine Test!")
+      # Sample main trials
+      if(stratified_sampling) sample_trials(num_trials, custom_stratified_sampling_allocation),
+
+      # Main Trials
+      DMT_main_trials(num_trials, tempo, with_feedback, trial_timeout, stratified_sampling, full_drum_matrix),
+
+      psychTestR::final_page(psychTestR::i18n("FINAL_MESSAGE"))
+    ),
+
+    dict = dict
   )
 }
-
 
 DMT_main_trials <- function(num_trials, tempo, with_feedback, trial_timeout = 90, stratified_sampling, drum_matrix) {
   purrr::map(1:num_trials, ~ DMT_page_loop(trial_no = .x,
@@ -120,7 +134,7 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE) {
   psychTestR::join(
 
     one_button_page_trial_no(trial_no, num_examples, demo = TRUE,
-                             text = 'The next page will show you the correct answer. Click "Play stimulus" to hear it.'),
+                             text = psychTestR::i18n("DEMO_SOLUTION_PROMPT")),
 
     psychTestR::code_block(function(state, ...) {
 
@@ -157,7 +171,7 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE) {
       show_solution = TRUE
     ),
 
-    one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = "Now enter the pattern you just saw."),
+    one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = psychTestR::i18n("DEMO_ENTER_PROMPT")),
 
     # Get user to enter it
     DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix, with_feedback = with_feedback)
@@ -299,3 +313,48 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
 }
 
 
+#' DMT languages
+#'
+#' Lists the languages available for DMT implementations. Muss mit den
+#' Spaltennamen (in Kleinschreibung) in data_raw/DMT_dict.xlsx übereinstimmen.
+#' @export
+DMT_languages <- function() {
+  c("en", "de", "de_f")
+}
+#' Reduce DMT_dict to a single language
+#'
+#' Internal helper: subsets an i18n_dict down to just the `key` column
+#' plus one language column, so that new_timeline() builds the test for
+#' exactly that one language. The resulting timeline supports no other
+#' language, not even via the `?language=` URL parameter that psychTestR
+#' would otherwise offer.
+#'
+#' @param dict An i18n_dict object (e.g. DMT_dict).
+#' @param language Scalar character, one of DMT_languages().
+#' @keywords internal
+DMT_dict_for_language <- function(dict, language) {
+
+  stopifnot(is.scalar.character(language))
+
+  language <- tolower(language)
+
+  if (!language %in% DMT_languages()) {
+    stop(
+      "Unsupported language '", language, "'. ",
+      "Supported languages: ", paste(DMT_languages(), collapse = ", ")
+    )
+  }
+
+  dict_df <- as.data.frame(dict)
+
+  if (!language %in% names(dict_df)) {
+    stop(
+      "Language '", language, "' is listed in DMT_languages() but has no ",
+      "matching column in DMT_dict. Check data_raw/DMT_dict.xlsx."
+    )
+  }
+
+  sub_df <- dict_df[, c("key", language)]
+
+  psychTestR::i18n_dict$new(sub_df)
+}
