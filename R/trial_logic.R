@@ -1,4 +1,12 @@
-
+# trial_logic.R
+#
+# Vektorisiert: alle Teilnehmer-sichtbaren Strings laufen über
+# psychTestR::i18n() und Keys aus DMT_dict.
+#
+# WICHTIG: `label` in DMT_trial_page() (Format "DMT_trial_<n>_attempt_<a>")
+# und `trial_name` in while_logic() sind interne Ergebnis-Keys, KEINE
+# UI-Texte — diese dürfen nie über i18n() laufen, sonst bricht die
+# Attempt-Loop-Logik (results[[trial_name]] Lookup).
 
 DMT_page_loop <- function(trial_no,
                           num_trials,
@@ -63,7 +71,7 @@ DMT_page_loop <- function(trial_no,
 
     psychTestR::while_loop(
 
-      test = if(with_feedback) while_logic(trial_no) else no_feedback_logic(),
+      test = if(with_feedback) while_logic(trial_no, demo) else no_feedback_logic(),
 
       logic = list(
 
@@ -89,7 +97,8 @@ DMT_page_loop <- function(trial_no,
             show_solution = show_solution,
             trial_timeout = trial_timeout,
             initial_state = saved_state,
-            stratified_sampling = stratified_sampling
+            stratified_sampling = stratified_sampling,
+            collect_answer = TRUE
           )
 
         }),
@@ -110,43 +119,48 @@ DMT_page_loop <- function(trial_no,
 }
 
 
-while_logic <- function(trial_no) {
+while_logic <- function(trial_no, demo = FALSE) {
 
   function(state, ...) {
 
-  logging::loginfo("Run while_logic")
+    logging::loginfo("Run while_logic")
 
-  attempt <- psychTestR::get_local("attempt", state)
+    attempt <- psychTestR::get_local("attempt", state)
 
-  # Always run first attempt
-  if (attempt == 1L) {
-    logging::loginfo("attempt == 1L so run the loop!")
-    return(TRUE)
-  }
+    # Always run first attempt
+    if (attempt == 1L) {
+      logging::loginfo("attempt == 1L so run the loop!")
+      return(TRUE)
+    }
 
-  last_attempt <- attempt - 1L
+    last_attempt <- attempt - 1L
 
-  trial_name <- paste0("DMT_trial_", trial_no, "_attempt_", last_attempt)
+    # Interner Ergebnis-Key, NICHT übersetzen (siehe Kopfkommentar).
+    # Demo- und Haupt-Trials leben in getrennten Label-Namespaces
+    # (siehe DMT_trial_page()), damit trial_no == 1 in Demo und Haupt
+    # nicht kollidiert.
+    label_prefix <- if (demo) "DMT_demo_trial_" else "DMT_trial_"
+    trial_name <- paste0(label_prefix, trial_no, "_attempt_", last_attempt)
 
-  results <- psychTestR::results(state)$result
+    results <- psychTestR::results(state)$result
 
-  if (!trial_name %in% names(results)) {
-    logging::loginfo("%s not in results so run the loop!", trial_name)
-    return(TRUE)
-  }
+    if (!trial_name %in% names(results)) {
+      logging::loginfo("%s not in results so run the loop!", trial_name)
+      return(TRUE)
+    }
 
-  answer <- results[[trial_name]]
+    answer <- results[[trial_name]]
 
-  is_correct <- isTRUE(answer$global_correct)
+    is_correct <- isTRUE(answer$global_correct)
 
-  # Stop if correct
-  if (is_correct) {
-    logging::loginfo("is_correct TRUE, so stop and exit loop!")
-    return(FALSE)
-  }
+    # Stop if correct
+    if (is_correct) {
+      logging::loginfo("is_correct TRUE, so stop and exit loop!")
+      return(FALSE)
+    }
 
-  # Otherwise continue up to 4 attempts
-  return(last_attempt < 4L)
+    # Otherwise continue up to 4 attempts
+    return(last_attempt < 4L)
   }
 }
 
@@ -171,7 +185,8 @@ DMT_trial_page <- function(trial_no,
                            demo = FALSE,
                            trial_timeout = 90,
                            initial_state = NULL,
-                           stratified_sampling = TRUE) {
+                           stratified_sampling = TRUE,
+                           collect_answer = TRUE) {
 
   logging::loginfo("show_solution?? %s", show_solution)
   logging::loginfo("initial_state?? %s", initial_state)
@@ -202,7 +217,7 @@ DMT_trial_page <- function(trial_no,
     ),
     psychTestR::trigger_button(
       "next",
-      "Next",
+      psychTestR::i18n("BUTTON_NEXT"),
       onclick = if(show_solution)
         "if(window.stopDMT){ window.stopDMT();resetSequencer();}"
       else
@@ -210,14 +225,25 @@ DMT_trial_page <- function(trial_no,
     )
   )
 
+  # Interner Ergebnis-Key: demo- und Haupt-Trials duerfen sich NIE im
+  # selben Label-Namespace ueberschneiden, sonst werden z.B. Demo-Trial 1
+  # und Haupt-Trial 1 (beide trial_no == 1) im Ergebnis-Objekt vermischt.
+  label_prefix <- if (demo) "DMT_demo_trial_" else "DMT_trial_"
+
+  # collect_answer steuert UNABHAENGIG von show_solution, ob diese Seite
+  # ueberhaupt eine Antwort einsammelt/speichert. Wird von DMT_feedback()
+  # auf FALSE gesetzt, da die Feedback-Seite selbst keine neue Eingabe ist,
+  # sondern nur den vorherigen Attempt anzeigt (vorher wurde hier immer
+  # unter "..._attempt_1" nochmal derselbe Stand gespeichert).
+  should_collect <- collect_answer && !show_solution
 
   psychTestR::page(
     ui,
-    label = paste0("DMT_trial_", trial_no, "_attempt_", attempt),
-    get_answer = if(show_solution) NULL else dmt_get_answer(stimulus_drum_matrix, stratified_sampling),
-    save_answer = !show_solution
+    # Interner Ergebnis-Key, NICHT übersetzen (siehe Kopfkommentar).
+    label = paste0(label_prefix, trial_no, "_attempt_", attempt),
+    get_answer = if(should_collect) dmt_get_answer(stimulus_drum_matrix, stratified_sampling) else NULL,
+    save_answer = should_collect
   )
-
 
 }
 
@@ -241,8 +267,8 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     trial_no    <- psychTestR::get_local("trial_no", state)
     stimulus_id <- psychTestR::get_local("stimulus_id", state)
     is_demo     <- psychTestR::get_local("demo", state)
-    timed_out <- isTRUE(input$dmtTimedOut)
-
+    attempt     <- psychTestR::get_local("attempt", state) %||% 1L
+    timed_out   <- isTRUE(input$dmtTimedOut)
 
     logging::loginfo("trial_no: %i | stimulus_id: %s | demo: %s", trial_no, stimulus_id, is_demo)
 
@@ -255,8 +281,36 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
       correct_answer <- drum_matrix %>%
         dplyr::filter(Stimulus == !!stimulus_id) %>%
         dplyr::select(Instrument, BeatPositionSixteenth)
+
     }
 
+    # ------------------------------------------------------------
+    # ISLP-relevante Item-Metadaten (Komplexitaet/Schwierigkeit b_j,
+    # Stratum). demo_drum_matrix hat Complexity, aber kein Source /
+    # ComplexityHalves (nur easy_stimuli_drum_matrix / drum_matrix).
+    # ------------------------------------------------------------
+
+    if (is_demo) {
+
+      stimulus_meta <- demo_drum_matrix %>%
+        dplyr::filter(Stimulus == !!stimulus_id) %>%
+        dplyr::slice(1)
+
+      complexity      <- stimulus_meta$Complexity %||% NA_real_
+      source_label    <- NA_character_
+      complexity_half <- NA_character_
+
+    } else {
+
+      stimulus_meta <- drum_matrix %>%
+        dplyr::filter(Stimulus == !!stimulus_id) %>%
+        dplyr::slice(1)
+
+      complexity      <- stimulus_meta$Complexity %||% NA_real_
+      source_label    <- stimulus_meta$Source %||% NA_character_
+      complexity_half <- stimulus_meta$ComplexityHalves %||% NA_character_
+
+    }
 
     if (length(input$sequencer_state) == 0) {
       user_answer_df <- tibble::tibble()
@@ -294,22 +348,57 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
       dplyr::summarise(
         ProportionCorrect = mean(Correct, na.rm = TRUE),
         NoMistakes = sum(Mistake, na.rm = TRUE),
+        NoHits = sum(Correct, na.rm = TRUE),
         .groups = "drop"
       ) %>%
+      dplyr::mutate(NoPositions = 16L) %>%
       complete_instruments(inst_levels = inst_levels)
 
 
     global_correct <- all(res_summary$NoMistakes == 0)
 
+    # ------------------------------------------------------------
+    # ISLP: Feedback-Layer, der NACH diesem Attempt gezeigt wird.
+    # Identische Logik wie in feedback.R::DMT_feedback(), hier
+    # gespiegelt, damit sie mit im Ergebnis landet.
+    # ------------------------------------------------------------
+
+    feedback_layer_shown <- min(attempt, 4L)
+
+    # ------------------------------------------------------------
+    # ISLP: session-weiter, trial-uebergreifender Attempt-Zaehler
+    # (fuer ein optionales Inter-Trial-Wachstumsmodell, t = 1...N_total)
+    # ------------------------------------------------------------
+
+    cumulative_attempt <- (psychTestR::get_global("cumulative_attempt", state) %||% 0L) + 1L
+    psychTestR::set_global("cumulative_attempt", cumulative_attempt, state)
+
+    # ------------------------------------------------------------
+    # Reaktionszeit: Platzhalter, bis dmt.js einen Timestamp/Duration
+    # mitliefert (input$attempt_rt_ms). Bis dahin NA.
+    # ------------------------------------------------------------
+
+    rt_ms <- input$attempt_rt_ms %||% NA_real_
+
     list(
-      res_summary = res_summary,
-      global_correct = global_correct,
-      correct_answer = correct_answer,
-      timed_out = timed_out
+      res_summary          = res_summary,
+      global_correct       = global_correct,
+      correct_answer       = correct_answer,
+      timed_out            = timed_out,
+      trial_no             = trial_no,
+      stimulus_id          = stimulus_id,
+      demo                 = is_demo,
+      attempt              = attempt,
+      feedback_layer_shown = feedback_layer_shown,
+      cumulative_attempt   = cumulative_attempt,
+      complexity           = complexity,
+      source               = source_label,
+      complexity_half      = complexity_half,
+      rt_ms                = rt_ms,
+      timestamp            = Sys.time()
     )
   }
 }
-
 dmt_ui <- function(trial_no,
                    stimulus_id,
                    num_trials,
@@ -351,8 +440,8 @@ dmt_ui <- function(trial_no,
     # ------------------------------------------------------------
 
     if(show_play_buttons) shiny::fluidRow(
-      if(!is.null(stimulus_json)) shiny::actionButton("play_stimulus", "Play stimulus"),
-      if(!demo) shiny::actionButton("play_sequencer", "Play your pattern")
+      if(!is.null(stimulus_json)) shiny::actionButton("play_stimulus", psychTestR::i18n("BUTTON_PLAY_STIMULUS")),
+      if(!demo) shiny::actionButton("play_sequencer", psychTestR::i18n("BUTTON_PLAY_PATTERN"))
     ),
 
     shiny::tags$br(),
@@ -387,13 +476,13 @@ dmt_ui <- function(trial_no,
       shiny::tags$div(
         class = "sequencer",
 
-        shiny::tags$div(class = "inst", "Hi-hat"),
+        shiny::tags$div(class = "inst", psychTestR::i18n("INSTRUMENT_HIHAT")),
         shiny::tags$div(class = "grid", id = "row0"),
 
-        shiny::tags$div(class = "inst", "Snare"),
+        shiny::tags$div(class = "inst", psychTestR::i18n("INSTRUMENT_SNARE")),
         shiny::tags$div(class = "grid", id = "row1"),
 
-        shiny::tags$div(class = "inst", "Kick"),
+        shiny::tags$div(class = "inst", psychTestR::i18n("INSTRUMENT_BASSDRUM")),
         shiny::tags$div(class = "grid", id = "row2")
       ),
     )
@@ -414,8 +503,8 @@ dmt_ui <- function(trial_no,
       "
       window.initialSequencerState = %s;
       ",
-            initial_state_json
-          )),
+      initial_state_json
+    )),
 
     # ------------------------------------------------------------
     # STIMULUS + TRIAL
@@ -449,7 +538,7 @@ dmt_ui <- function(trial_no,
 
     if (!is.null(feedback)) {
       shiny::tags$div(class = "feedback-container",
-                      shiny::tags$h4("Feedback"),
+                      shiny::tags$h4(psychTestR::i18n("FEEDBACK_HEADER")),
                       feedback)
     },
 
@@ -475,10 +564,17 @@ dmt_ui <- function(trial_no,
 
 
 display_trial_no <- function(trial_no, num_trials, demo = FALSE) {
-  if (!is.null(trial_no))
+  if (!is.null(trial_no)) {
+
+    key <- if (demo) "TRIAL_COUNTER_EXAMPLE" else "TRIAL_COUNTER"
+
     shiny::tags$p(shiny::strong(
-      if(demo) sprintf("Example Trial %s / %s", trial_no, num_trials) else sprintf("Trial %s / %s", trial_no, num_trials)
+      psychTestR::i18n(
+        key,
+        sub = c(trial_no = as.character(trial_no), num_trials = as.character(num_trials))
+      )
     ))
+  }
 }
 
 
@@ -494,7 +590,9 @@ complete_instruments <- function(res_summary,
       tibble::tibble(
         Instrument = missing_insts,
         ProportionCorrect = 1L,
-        NoMistakes = 0L
+        NoMistakes = 0L,
+        NoHits = 0L,
+        NoPositions = 16L
       )
     )
   }
@@ -506,7 +604,6 @@ complete_instruments <- function(res_summary,
     ) %>%
     dplyr::arrange(Instrument)
 }
-
 
 timeout_js <- function(show_solution, trial_timeout) {
   if (!show_solution && !is.null(trial_timeout))

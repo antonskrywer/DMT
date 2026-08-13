@@ -19,5 +19,8 @@ Imports:
     magrittr,
     psychTestR,
     shiny
+Suggests:
+    readxl,
+    usethis
 Depends: 
     R (>= 3.5)

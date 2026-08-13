@@ -2,5 +2,8 @@
 
 export("%>%")
 export(DMT)
+export(DMT_languages)
+export(DMT_results_dir_to_long)
+export(DMT_results_to_long)
 export(DMT_standalone)
 importFrom(magrittr,"%>%")
