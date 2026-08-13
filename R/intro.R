@@ -1,3 +1,8 @@
+# intro.R
+#
+# Vektorisiert: alle Teilnehmer-sichtbaren Strings laufen über
+# psychTestR::i18n() und Keys aus DMT_dict. Funktioniert nur innerhalb
+# des new_timeline(dict = DMT_dict)-Wrappers in DMT.R.
 
 DMT_intro <- function(tempo) {
 
@@ -9,10 +14,11 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p(shiny::tags$strong("Welcome to the Drum Machine Test")),
-        shiny::tags$p("This test measures your musical learning ability."),
-        shiny::tags$p("You will learn to recreate drum patterns using a virtual drum machine.")
-      )
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("INTRO_WELCOME"))),
+        shiny::tags$p(psychTestR::i18n("INTRO_TEST_DESC")),
+        shiny::tags$p(psychTestR::i18n("INTRO_TEST_DESC_2")),
+        ),
+        button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -26,9 +32,10 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p("The difficulty will adapt to your performance."),
-        shiny::tags$p("Don't worry if it feels difficult at first.")
-      )
+        shiny::tags$p(psychTestR::i18n("INTRO_ADAPTIVE")),
+        shiny::tags$p(psychTestR::i18n("INTRO_REASSURANCE")),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -37,15 +44,16 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p(shiny::tags$strong("How it works")),
-        shiny::tags$p("Each pattern consists of three layers:"),
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("HOW_IT_WORKS_TITLE"))),
+        shiny::tags$p(psychTestR::i18n("HOW_IT_WORKS_INTRO")),
         shiny::tags$ul(
-          shiny::tags$li("Hi-hat (top row)"),
-          shiny::tags$li("Snare (middle row)"),
-          shiny::tags$li("Bass drum (bottom row)")
-        )
-      )
-    ),
+          shiny::tags$li(psychTestR::i18n("LAYER_HIHAT")),
+          shiny::tags$li(psychTestR::i18n("LAYER_SNARE")),
+          shiny::tags$li(psychTestR::i18n("LAYER_BASSDRUM"))
+        ),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
+      ),
 
     # --------------------------------------------------
     # 4. Grid + interaction
@@ -58,10 +66,10 @@ DMT_intro <- function(tempo) {
                num_trials = NULL,
                stimulus_json = NULL,
                tempo = tempo),
-        shiny::tags$p("The grid represents one bar divided into 16 steps."),
-        shiny::tags$p("Click to activate or deactivate sounds."),
-        shiny::tags$p("Feel free to explore how this works below and click play to hear your input."),
-        shiny::tags$button("Next", class = "btn", onclick = "window.stopDMT();next_page();")
+        shiny::tags$p(psychTestR::i18n("GRID_EXPLANATION")),
+        shiny::tags$p(psychTestR::i18n("GRID_INSTRUCTION")),
+        shiny::tags$p(psychTestR::i18n("GRID_EXPLORE")),
+        shiny::tags$button(psychTestR::i18n("BUTTON_NEXT"), class = "btn", onclick = "window.stopDMT();next_page();")
       )
     ),
 
@@ -71,8 +79,9 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p("Your goal is to recreate a given pattern as accurately as possible.")
-      )
+        shiny::tags$p(psychTestR::i18n("GOAL_TEXT")),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -81,15 +90,16 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p(shiny::tags$strong("Feedback system")),
-        shiny::tags$p("After each attempt, you will be told:"),
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("FEEDBACK_SYSTEM_TITLE"))),
+        shiny::tags$p(psychTestR::i18n("FEEDBACK_SYSTEM_INTRO")),
         shiny::tags$ol(
-          shiny::tags$li("Correct / Incorrect"),
-          shiny::tags$li("Which layer contains mistakes"),
-          shiny::tags$li("How many mistakes per layer"),
-          shiny::tags$li("Full correct pattern")
-        )
-      )
+          shiny::tags$li(psychTestR::i18n("FEEDBACK_LIST_1")),
+          shiny::tags$li(psychTestR::i18n("FEEDBACK_LIST_2")),
+          shiny::tags$li(psychTestR::i18n("FEEDBACK_LIST_3")),
+          shiny::tags$li(psychTestR::i18n("FEEDBACK_LIST_4"))
+        ),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -98,10 +108,11 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p(shiny::tags$strong("Practice trials")),
-        shiny::tags$p("Before the main task, you will complete a few practice trials."),
-        shiny::tags$p("You will receive feedback after each attempt.")
-      )
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("PRACTICE_TITLE"))),
+        shiny::tags$p(psychTestR::i18n("PRACTICE_INTRO")),
+        shiny::tags$p(psychTestR::i18n("PRACTICE_FEEDBACK_NOTE")),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -110,9 +121,10 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p("You can repeat each pattern multiple times."),
-        shiny::tags$p("It is completely normal to make mistakes at first.")
-      )
+        shiny::tags$p(psychTestR::i18n("REPEAT_NOTE")),
+        shiny::tags$p(psychTestR::i18n("MISTAKES_NORMAL")),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
     # --------------------------------------------------
@@ -121,10 +133,11 @@ DMT_intro <- function(tempo) {
     psychTestR::one_button_page(
       shiny::tags$div(
         dmt_ui_header(),
-        shiny::tags$p(shiny::tags$strong("Tip")),
-        shiny::tags$p("Focus on one layer at a time (hi-hat, snare, bass)."),
-        shiny::tags$p("Build the pattern step by step.")
-      )
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("TIP_TITLE"))),
+        shiny::tags$p(psychTestR::i18n("TIP_TEXT_1")),
+        shiny::tags$p(psychTestR::i18n("TIP_TEXT_2")),
+        ),
+      button_text = psychTestR::i18n("CONTINUE")
     )
 
   ) %>% unlist(recursive = FALSE)

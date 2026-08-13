@@ -8,6 +8,12 @@
 #' @param trial_timeout
 #' @param language Scalar character, one of DMT_languages() (currently
 #' "en", "de", "de_f"). Fixes the standalone test to exactly this language.
+#' @param admin_password Password required to access the psychTestR admin
+#' panel (reachable by appending \code{?admin=1} to the test URL). Must be
+#' set explicitly — there is no insecure default anymore. Choose a strong,
+#' non-guessable password before deploying to a public server.
+#' @param researcher_email Contact email shown to participants and used in
+#' the admin panel.
 #'
 #' @returns
 #' @export
@@ -20,7 +26,17 @@ DMT_standalone <- function(tempo = 100,
                            stratified_sampling = TRUE,
                            custom_stratified_sampling_allocation = NULL,
                            trial_timeout = 90,
-                           language = "en") {
+                           language = "en",
+                           admin_password,
+                           researcher_email = "sebastian.silas@uni_hamburg.de") {
+
+  if (missing(admin_password) || !is.scalar.character(admin_password) || nchar(admin_password) < 8) {
+    stop(
+      "admin_password must be supplied as a character string with at least ",
+      "8 characters. Example: DMT_standalone(admin_password = 'a_strong_password_here')"
+    )
+  }
+
   DMT(tempo = tempo,
       num_trials = num_trials,
       num_examples = num_examples,
@@ -33,15 +49,15 @@ DMT_standalone <- function(tempo = 100,
     psychTestR::make_test(
       opt = psychTestR::test_options(
         title = "Drum Machine Test",
-        admin_password = "test",
-        researcher_email = "sebastian.silas@uni_hamburg.de",
+        admin_password = admin_password,
+        enable_admin_panel = TRUE,
+        researcher_email = researcher_email,
         languages = language,
         display = psychTestR::display_options(full_screen = TRUE),
         additional_scripts = "https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"
       )
     )
 }
-
 #' Embed Drum Machine Test in battery
 #'
 #' @param num_trials
@@ -238,8 +254,6 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
     n_per_group <- floor(num_trials / 4)
     remainder   <- num_trials %% 4
 
-
-
     if(check_sampling_allocation(custom_stratified_sampling_allocation)) {
       allocation <- custom_stratified_sampling_allocation
     } else {
@@ -256,35 +270,40 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
       if (remainder >= 2) allocation[["easy_hard"]] <- allocation[["easy_hard"]] + 1
       if (remainder >= 3) allocation[["easy_easy"]] <- allocation[["easy_easy"]] + 1
 
-
     }
 
-
+    # --------------------------------------------------------------
+    # NEU: Stratum-Label mitführen, damit wir die Blockreihenfolge
+    # (easy_easy -> easy_hard -> normal_easy -> normal_hard) am Ende
+    # erzwingen können. Vorher ging dieses Label verloren, weshalb
+    # die TrialNo komplett zufällig über alle vier Gruppen vergeben
+    # wurde.
+    # --------------------------------------------------------------
     sampled_drum_matrix <- dplyr::bind_rows(
 
       sample_stratum(
         easy_stimuli_drum_matrix,
         easy_easy,
         allocation[["easy_easy"]]
-      ),
+      ) %>% dplyr::mutate(Stratum = "easy_easy"),
 
       sample_stratum(
         easy_stimuli_drum_matrix,
         easy_hard,
         allocation[["easy_hard"]]
-      ),
+      ) %>% dplyr::mutate(Stratum = "easy_hard"),
 
       sample_stratum(
         drum_matrix,
         normal_easy,
         allocation[["normal_easy"]]
-      ),
+      ) %>% dplyr::mutate(Stratum = "normal_easy"),
 
       sample_stratum(
         drum_matrix,
         normal_hard,
         allocation[["normal_hard"]]
-      )
+      ) %>% dplyr::mutate(Stratum = "normal_hard")
 
     )
 
@@ -298,12 +317,26 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
       dplyr::count(ComplexityHalves) %>%
       print()
 
-    # Randomise and trial no
+    # --------------------------------------------------------------
+    # NEU: TrialNo wird jetzt blockweise vergeben, nicht mehr komplett
+    # zufällig. Reihenfolge der Blöcke ist fest:
+    #   easy_easy -> easy_hard -> normal_easy -> normal_hard
+    # Innerhalb jedes Blocks bleibt die Stimulus-Reihenfolge zufällig.
+    # --------------------------------------------------------------
+    stratum_order <- c("easy_easy", "easy_hard", "normal_easy", "normal_hard")
+
     trial_order <- sampled_drum_matrix %>%
-      dplyr::distinct(Stimulus) %>%
-      dplyr::mutate(TrialNo = sample(dplyr::n()))
+      dplyr::distinct(Stimulus, Stratum) %>%
+      dplyr::mutate(Stratum = factor(Stratum, levels = stratum_order)) %>%
+      dplyr::group_by(Stratum) %>%
+      dplyr::mutate(WithinBlockOrder = sample(dplyr::n())) %>%
+      dplyr::ungroup() %>%
+      dplyr::arrange(Stratum, WithinBlockOrder) %>%
+      dplyr::mutate(TrialNo = dplyr::row_number()) %>%
+      dplyr::select(Stimulus, TrialNo)
 
     sampled_drum_matrix <- sampled_drum_matrix %>%
+      dplyr::select(-Stratum) %>%
       dplyr::left_join(trial_order, by = "Stimulus") %>%
       dplyr::arrange(TrialNo)
 
@@ -311,7 +344,6 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
 
   })
 }
-
 
 #' DMT languages
 #'
