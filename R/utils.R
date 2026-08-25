@@ -77,3 +77,14 @@ check_sampling_allocation <- function(custom_stratified_sampling_allocation) {
                  c("easy_easy", "easy_hard", "normal_easy", "normal_hard") )
   ) == 0
 }
+
+# ------------------------------------------------------------------
+# %||%: Base R hat diesen Operator erst ab Version 4.4.0 eingebaut.
+# Der Server läuft mit R 4.1.2, deshalb muss die Funktion hier selbst
+# definiert werden, sonst crasht das Paket dort mit
+# "could not find function %||%", sobald dmt_get_answer() aufgerufen
+# wird (siehe Server-Crash-Bug beim ersten Demo-Feedback-Schritt).
+# ------------------------------------------------------------------
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
+}
