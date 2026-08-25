@@ -12,12 +12,22 @@ DMT_standalone(
   stratified_sampling = TRUE,
   custom_stratified_sampling_allocation = NULL,
   trial_timeout = 90,
-  language = "en"
+  language = "en",
+  admin_password,
+  researcher_email = "sebastian.silas@uni_hamburg.de"
 )
 }
 \arguments{
 \item{language}{Scalar character, one of DMT_languages() (currently
 "en", "de", "de_f"). Fixes the standalone test to exactly this language.}
+
+\item{admin_password}{Password required to access the psychTestR admin
+panel (reachable by appending \code{?admin=1} to the test URL). Must be
+set explicitly — there is no insecure default anymore. Choose a strong,
+non-guessable password before deploying to a public server.}
+
+\item{researcher_email}{Contact email shown to participants and used in
+the admin panel.}
 }
 \description{
 Standalone Drum Machine Test

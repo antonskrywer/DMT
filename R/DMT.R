@@ -88,12 +88,34 @@ DMT <- function(num_trials = 5L,
     stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
   }
 
+  # ------------------------------------------------------------
+  # BUGFIX: easy_stimuli_drum_matrix wird in stimuli.R mit
+  #   mutate(Audiofile = NA, Seconds = NA)
+  # gebaut — NA hat in R den Typ logical. drum_matrix hat Audiofile
+  # als character (echte Dateinamen). dplyr::bind_rows() lehnt diesen
+  # Typ-Konflikt seit dplyr 1.0+ / vctrs strikt ab.
+  # Fix: beide Spalten werden vor dem bind_rows() explizit auf
+  # denselben Typ gecastet (character / numeric), damit das Merging
+  # unabhängig vom jeweiligen NA-Typ in den Rohdaten funktioniert.
+  # Betrifft BEIDE bind_rows()-Aufrufe: hier (statischer Pfad,
+  # stratified_sampling = FALSE) und in sample_trials() unten
+  # (dynamischer Pfad, stratified_sampling = TRUE).
+  # ------------------------------------------------------------
+
   # If static test:
   easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
-    dplyr::mutate(Source = "easy")
+    dplyr::mutate(
+      Source    = "easy",
+      Audiofile = as.character(Audiofile),
+      Seconds   = as.numeric(Seconds)
+    )
 
   drum_matrix <- drum_matrix %>%
-    dplyr::mutate(Source = "normal")
+    dplyr::mutate(
+      Source    = "normal",
+      Audiofile = as.character(Audiofile),
+      Seconds   = as.numeric(Seconds)
+    )
 
   full_drum_matrix <- dplyr::bind_rows(easy_stimuli_drum_matrix, drum_matrix) %>%
     dplyr::mutate(TrialNo = dplyr::row_number())
@@ -209,12 +231,27 @@ one_button_page_trial_no <- function(trial_no, num_trials, text, demo = FALSE) {
 sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
   psychTestR::code_block(function(state, ...) {
 
-    # Label
+    # ------------------------------------------------------------
+    # BUGFIX (s. DMT() oben): Typ-Angleichung von Audiofile/Seconds
+    # auch hier im dynamischen Sampling-Pfad, da sample_trials() die
+    # Package-Objekte direkt liest (nicht die bereits gecasteten
+    # lokalen Kopien aus DMT()). Ohne diesen Cast schlägt bind_rows()
+    # fehl, weil easy_stimuli_drum_matrix$Audiofile logical (NA) ist
+    # und drum_matrix$Audiofile character ist.
+    # ------------------------------------------------------------
     easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
-      dplyr::mutate(Source = "easy")
+      dplyr::mutate(
+        Source    = "easy",
+        Audiofile = as.character(Audiofile),
+        Seconds   = as.numeric(Seconds)
+      )
 
     drum_matrix <- drum_matrix %>%
-      dplyr::mutate(Source = "normal")
+      dplyr::mutate(
+        Source    = "normal",
+        Audiofile = as.character(Audiofile),
+        Seconds   = as.numeric(Seconds)
+      )
 
     sample_stratum <- function(dat, half_label, n) {
 
@@ -273,11 +310,9 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
     }
 
     # --------------------------------------------------------------
-    # NEU: Stratum-Label mitführen, damit wir die Blockreihenfolge
+    # Stratum-Label mitführen, damit wir die Blockreihenfolge
     # (easy_easy -> easy_hard -> normal_easy -> normal_hard) am Ende
-    # erzwingen können. Vorher ging dieses Label verloren, weshalb
-    # die TrialNo komplett zufällig über alle vier Gruppen vergeben
-    # wurde.
+    # erzwingen können.
     # --------------------------------------------------------------
     sampled_drum_matrix <- dplyr::bind_rows(
 
@@ -318,8 +353,7 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
       print()
 
     # --------------------------------------------------------------
-    # NEU: TrialNo wird jetzt blockweise vergeben, nicht mehr komplett
-    # zufällig. Reihenfolge der Blöcke ist fest:
+    # TrialNo wird blockweise vergeben:
     #   easy_easy -> easy_hard -> normal_easy -> normal_hard
     # Innerhalb jedes Blocks bleibt die Stimulus-Reihenfolge zufällig.
     # --------------------------------------------------------------

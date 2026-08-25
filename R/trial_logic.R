@@ -36,6 +36,8 @@ DMT_page_loop <- function(trial_no,
 
       psychTestR::set_local("sequencer_state", NULL, state)
 
+      psychTestR::set_local("last_global_correct", NULL, state)
+
       if(stratified_sampling && !demo) {
 
         dynamic_drum_matrix <- psychTestR::get_global("sampled_trials", state)
@@ -49,8 +51,6 @@ DMT_page_loop <- function(trial_no,
           dplyr::filter(TrialNo == trial_no)
 
       }
-
-
 
       stimulus_id <- stimulus %>%
         dplyr::pull(Stimulus) %>%
@@ -135,23 +135,7 @@ while_logic <- function(trial_no, demo = FALSE) {
 
     last_attempt <- attempt - 1L
 
-    # Interner Ergebnis-Key, NICHT übersetzen (siehe Kopfkommentar).
-    # Demo- und Haupt-Trials leben in getrennten Label-Namespaces
-    # (siehe DMT_trial_page()), damit trial_no == 1 in Demo und Haupt
-    # nicht kollidiert.
-    label_prefix <- if (demo) "DMT_demo_trial_" else "DMT_trial_"
-    trial_name <- paste0(label_prefix, trial_no, "_attempt_", last_attempt)
-
-    results <- psychTestR::results(state)$result
-
-    if (!trial_name %in% names(results)) {
-      logging::loginfo("%s not in results so run the loop!", trial_name)
-      return(TRUE)
-    }
-
-    answer <- results[[trial_name]]
-
-    is_correct <- isTRUE(answer$global_correct)
+    is_correct <- isTRUE(psychTestR::get_local("last_global_correct", state))
 
     # Stop if correct
     if (is_correct) {
@@ -225,21 +209,12 @@ DMT_trial_page <- function(trial_no,
     )
   )
 
-  # Interner Ergebnis-Key: demo- und Haupt-Trials duerfen sich NIE im
-  # selben Label-Namespace ueberschneiden, sonst werden z.B. Demo-Trial 1
-  # und Haupt-Trial 1 (beide trial_no == 1) im Ergebnis-Objekt vermischt.
   label_prefix <- if (demo) "DMT_demo_trial_" else "DMT_trial_"
 
-  # collect_answer steuert UNABHAENGIG von show_solution, ob diese Seite
-  # ueberhaupt eine Antwort einsammelt/speichert. Wird von DMT_feedback()
-  # auf FALSE gesetzt, da die Feedback-Seite selbst keine neue Eingabe ist,
-  # sondern nur den vorherigen Attempt anzeigt (vorher wurde hier immer
-  # unter "..._attempt_1" nochmal derselbe Stand gespeichert).
   should_collect <- collect_answer && !show_solution
 
   psychTestR::page(
     ui,
-    # Interner Ergebnis-Key, NICHT übersetzen (siehe Kopfkommentar).
     label = paste0(label_prefix, trial_no, "_attempt_", attempt),
     get_answer = if(should_collect) dmt_get_answer(stimulus_drum_matrix, stratified_sampling) else NULL,
     save_answer = should_collect
@@ -258,6 +233,17 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     )
 
     logging::loginfo("dmt_get_answer stratified_sampling: %s", stratified_sampling)
+
+    # ==============================================================
+    # TEMPORÄR – NUR DIAGNOSE (Bug B: Layer 3 zeigt manchmal 2 statt
+    # 1 Fehler). Nach Reproduktion/Analyse wieder entfernen.
+    # ==============================================================
+    logging::loginfo("DIAG sequencer_state class: %s", paste(class(input$sequencer_state), collapse = ","))
+    logging::loginfo("DIAG sequencer_state dim: %s", paste(dim(input$sequencer_state), collapse = "x"))
+    logging::loginfo("DIAG sequencer_state str: %s", paste(utils::capture.output(str(input$sequencer_state)), collapse = " | "))
+    # ==============================================================
+    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
+    # ==============================================================
 
     # If dynamic, use dynamically sampled drum matrix
     if(stratified_sampling) {
@@ -283,12 +269,6 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         dplyr::select(Instrument, BeatPositionSixteenth)
 
     }
-
-    # ------------------------------------------------------------
-    # ISLP-relevante Item-Metadaten (Komplexitaet/Schwierigkeit b_j,
-    # Stratum). demo_drum_matrix hat Complexity, aber kein Source /
-    # ComplexityHalves (nur easy_stimuli_drum_matrix / drum_matrix).
-    # ------------------------------------------------------------
 
     if (is_demo) {
 
@@ -324,8 +304,15 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         tidyr::pivot_longer(HiHat:Kick, names_to = "Instrument", values_to = "UserSelected")
     }
 
+    # ==============================================================
+    # TEMPORÄR – NUR DIAGNOSE
+    # ==============================================================
+    logging::loginfo("DIAG user_answer_df: %s", paste(utils::capture.output(print(user_answer_df)), collapse = " | "))
+    # ==============================================================
+    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
+    # ==============================================================
+
     if(length(user_answer_df) == 0L) {
-      # Case of no user entry
       compare <- correct_answer %>%
         dplyr::mutate(Correct = 0L,
                       Mistake = 1L)
@@ -354,29 +341,22 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
       dplyr::mutate(NoPositions = 16L) %>%
       complete_instruments(inst_levels = inst_levels)
 
+    # ==============================================================
+    # TEMPORÄR – NUR DIAGNOSE
+    # ==============================================================
+    logging::loginfo("DIAG res_summary: %s", paste(utils::capture.output(print(res_summary)), collapse = " | "))
+    # ==============================================================
+    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
+    # ==============================================================
 
     global_correct <- all(res_summary$NoMistakes == 0)
 
-    # ------------------------------------------------------------
-    # ISLP: Feedback-Layer, der NACH diesem Attempt gezeigt wird.
-    # Identische Logik wie in feedback.R::DMT_feedback(), hier
-    # gespiegelt, damit sie mit im Ergebnis landet.
-    # ------------------------------------------------------------
+    psychTestR::set_local("last_global_correct", global_correct, state)
 
     feedback_layer_shown <- min(attempt, 4L)
 
-    # ------------------------------------------------------------
-    # ISLP: session-weiter, trial-uebergreifender Attempt-Zaehler
-    # (fuer ein optionales Inter-Trial-Wachstumsmodell, t = 1...N_total)
-    # ------------------------------------------------------------
-
     cumulative_attempt <- (psychTestR::get_global("cumulative_attempt", state) %||% 0L) + 1L
     psychTestR::set_global("cumulative_attempt", cumulative_attempt, state)
-
-    # ------------------------------------------------------------
-    # Reaktionszeit: Platzhalter, bis dmt.js einen Timestamp/Duration
-    # mitliefert (input$attempt_rt_ms). Bis dahin NA.
-    # ------------------------------------------------------------
 
     rt_ms <- input$attempt_rt_ms %||% NA_real_
 
@@ -423,6 +403,7 @@ dmt_ui <- function(trial_no,
         initial_state[17:32],
         initial_state[33:48]
       )
+
       jsonlite::toJSON(initial_state, auto_unbox = TRUE)
     }
 
@@ -435,9 +416,6 @@ dmt_ui <- function(trial_no,
         window.resetDMT();
       }
     "),
-    # ------------------------------------------------------------
-    # CONTROLS
-    # ------------------------------------------------------------
 
     if(show_play_buttons) shiny::fluidRow(
       if(!is.null(stimulus_json)) shiny::actionButton("play_stimulus", psychTestR::i18n("BUTTON_PLAY_STIMULUS")),
@@ -450,14 +428,9 @@ dmt_ui <- function(trial_no,
 
       id = "sequencer-wrapper",
 
-      # ------------------------------------------------------------
-      # BAR NUMBERS
-      # ------------------------------------------------------------
-
       shiny::tags$div(
         class = "barnumbers",
 
-        # empty cell to align with instrument labels column
         shiny::tags$div(class = "inst-spacer", ""),
 
         lapply(1:16, function(i) {
@@ -468,10 +441,6 @@ dmt_ui <- function(trial_no,
           }
         })
       ),
-
-      # ------------------------------------------------------------
-      # GRID
-      # ------------------------------------------------------------
 
       shiny::tags$div(
         class = "sequencer",
@@ -490,12 +459,7 @@ dmt_ui <- function(trial_no,
 
   shiny::tags$div(
 
-    # Timeout trials after N seconds
     timeout_js(show_solution, trial_timeout),
-
-    # ------------------------------------------------------------
-    # HEADER
-    # ------------------------------------------------------------
 
     dmt_ui_header(),
 
@@ -505,10 +469,6 @@ dmt_ui <- function(trial_no,
       ",
       initial_state_json
     )),
-
-    # ------------------------------------------------------------
-    # STIMULUS + TRIAL
-    # ------------------------------------------------------------
 
     shiny::tags$script(
       sprintf(
@@ -521,7 +481,6 @@ dmt_ui <- function(trial_no,
       )
     ),
 
-    # TEMPO FROM R
     shiny::tags$script(
       sprintf(
         'Shiny.setInputValue("tempo_init", %s, {priority: "event"});',
@@ -529,12 +488,7 @@ dmt_ui <- function(trial_no,
       )
     ),
 
-    # Trial No. UI
     display_trial_no(trial_no, num_trials, demo),
-
-    # ------------------------------------------------------------
-    # FEEDBACK
-    # ------------------------------------------------------------
 
     if (!is.null(feedback)) {
       shiny::tags$div(class = "feedback-container",
@@ -543,10 +497,6 @@ dmt_ui <- function(trial_no,
     },
 
     if(show_input_grid) input_grid,
-
-    # ------------------------------------------------------------
-    # JS
-    # ------------------------------------------------------------
 
     shiny::tags$script(src = "js/dmt.js"),
 
@@ -581,7 +531,6 @@ display_trial_no <- function(trial_no, num_trials, demo = FALSE) {
 complete_instruments <- function(res_summary,
                                  inst_levels = c("Kick", "HiHat", "Snare")) {
 
-  # Add missing instruments
   missing_insts <- setdiff(inst_levels, res_summary$Instrument)
 
   if (length(missing_insts) > 0) {
@@ -597,7 +546,6 @@ complete_instruments <- function(res_summary,
     )
   }
 
-  # Enforce factor order + sort
   res_summary %>%
     dplyr::mutate(
       Instrument = factor(Instrument, levels = inst_levels)
@@ -612,14 +560,12 @@ timeout_js <- function(show_solution, trial_timeout) {
 
       window.dmtTrialTimeout = setTimeout(function(){
 
-        // stop playback
         if(window.stopDMT){
           window.stopDMT();
         }
 
         window.dmtTimedOut = true;
 
-        // submit page
         document.getElementById('next').click();
 
       }, %i);
