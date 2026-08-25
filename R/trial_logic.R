@@ -322,7 +322,13 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     # TEMPORÄR – NUR DIAGNOSE
     # ==============================================================
     message("DIAG user_answer_df (nur UserSelected==1): ", paste(
-      utils::capture.output(print(dplyr::filter(user_answer_df, UserSelected == 1))),
+      utils::capture.output(
+        if ("UserSelected" %in% names(user_answer_df)) {
+          print(dplyr::filter(user_answer_df, UserSelected == 1))
+        } else {
+          print(user_answer_df)
+        }
+      ),
       collapse = " | "
     ))
     # ==============================================================
@@ -356,9 +362,34 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     # ENDE TEMPORÄRER DIAGNOSE-BLOCK
     # ==============================================================
 
+    # ----------------------------------------------------------------
+    # BUGFIX Punkt 3b: dplyr::group_by(Instrument, .drop = FALSE) war
+    # bisher wirkungslos, weil Instrument zu diesem Zeitpunkt ein
+    # Character-Vektor war (.drop = FALSE wirkt nur bei Faktoren). Dass
+    # trotzdem immer alle 3 Instrumente im Ergebnis auftauchten, lag
+    # allein an complete_instruments() danach.
+    #
+    # Fix: Instrument wird VOR group_by() explizit zu
+    # factor(levels = inst_levels) gemacht. Damit garantiert
+    # .drop = FALSE jetzt wirklich, dass alle 3 Instrument-Gruppen im
+    # summarise()-Output erscheinen - auch wenn eine davon 0 Zeilen in
+    # compare hat (z.B. bei komplett leerer Nutzereingabe, siehe
+    # Punkt 3d, oder falls ein Instrument keine erforderlichen Onsets
+    # hat).
+    #
+    # Nebenwirkung: mean() einer leeren Gruppe ergibt NaN statt eines
+    # Werts -> wird explizit auf 1 gesetzt (= derselbe Wert, den vorher
+    # complete_instruments() fuer fehlende Instrumente eingesetzt hat).
+    # Nach aussen also KEINE Verhaltensaenderung.
+    #
+    # complete_instruments() bleibt als zusaetzliches Sicherheitsnetz
+    # bestehen (tut jetzt i.d.R. nichts mehr, da res_summary durch
+    # .drop = FALSE bereits vollstaendig ist).
+    # ----------------------------------------------------------------
     inst_levels <- c("HiHat", "Snare", "Kick")
 
     res_summary <- compare %>%
+      dplyr::mutate(Instrument = factor(Instrument, levels = inst_levels)) %>%
       dplyr::group_by(Instrument, .drop = FALSE) %>%
       dplyr::summarise(
         ProportionCorrect = mean(Correct, na.rm = TRUE),
@@ -366,7 +397,10 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         NoHits = sum(Correct, na.rm = TRUE),
         .groups = "drop"
       ) %>%
-      dplyr::mutate(NoPositions = 16L) %>%
+      dplyr::mutate(
+        NoPositions = 16L,
+        ProportionCorrect = dplyr::if_else(is.nan(ProportionCorrect), 1, ProportionCorrect)
+      ) %>%
       complete_instruments(inst_levels = inst_levels)
 
     # ==============================================================
