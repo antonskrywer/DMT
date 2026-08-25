@@ -145,11 +145,24 @@ complexities %>%
 
 
 # Compute halves bins
+#
+# BUGFIX: cut_number(Complexity, n = 2) scheitert (Fehler "Insufficient
+# data values to produce n bins"), sobald es unter den Complexity-Werten
+# Ties auf der Bin-Grenze gibt - das ist bei den einfachen Stimuli
+# (easy_stimuli_drum_matrix, sehr wenige, oft sehr aehnliche Muster)
+# regelmaessig der Fall. dplyr::ntile(Complexity, n = 2) teilt stattdessen
+# anhand des Rangs in zwei moeglichst gleich grosse Haelften auf und ist
+# damit robust gegenueber Ties - liefert aber Integer-Bins (1/2) statt
+# Intervall-Labels. Explizit als.character(), damit ComplexityHalves in
+# beiden Datensaetzen (wie zuvor) ein Character-Spaltentyp bleibt - sonst
+# droht beim spaeteren bind_rows()/map_dfr() ueber mehrere Teilnehmer-
+# Ergebnisse (siehe results.R, complexity_half) derselbe Typkonflikt wie
+# beim Audiofile/Seconds-Bug (siehe CLAUDE.md Punkt 7).
 easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
-  mutate(ComplexityHalves = paste0("Easy", cut_number(Complexity, n = 2)))
+  mutate(ComplexityHalves = paste0("Easy", dplyr::ntile(Complexity, n = 2)))
 
 drum_matrix <- drum_matrix %>%
-  mutate(ComplexityHalves = cut_number(Complexity, n = 2))
+  mutate(ComplexityHalves = as.character(dplyr::ntile(Complexity, n = 2)))
 
 
 demo_drum_matrix <- read_csv("data-raw/Stimuli_Information/DMT_instruction_stimuli.csv") %>%

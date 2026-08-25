@@ -1,17 +1,27 @@
 Package: DMT
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Drum Machine Test
 Version: 0.2.1
 Authors@R: c(
     person(
-      "Jane", "Doe",
-      email = "jane@example.com",
+      "Sebastian", "Silas",
+      email = "sebastian.silas@uni-hamburg.de",
+      role = c("aut")
+    ),
+    person(
+      "Anton", "Schreiber",
+      email = "das.schreiberle@gmail.com",
       role = c("aut", "cre")
     )
   )
-Description: More about what it does (maybe more than one line).
-    Continuation lines should be indented.
-License: What license is it under?
+Description: Implements the Drum Machine Test (DMT), a psychTestR-based
+    music psychology test that presents 16-step, three-instrument
+    (hi-hat, snare, kick) drum patterns for perception and reproduction
+    on an interactive sequencer grid. Supports stratified sampling of
+    trials by pattern complexity and multiple languages, and exports
+    trial-level results for item response modelling (e.g. the
+    Item-Specific Learning Parameters model of Yu & Douglas, 2023).
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
