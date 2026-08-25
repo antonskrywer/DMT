@@ -88,33 +88,19 @@ DMT <- function(num_trials = 5L,
     stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
   }
 
-  # ------------------------------------------------------------
-  # BUGFIX: easy_stimuli_drum_matrix wird in stimuli.R mit
-  #   mutate(Audiofile = NA, Seconds = NA)
-  # gebaut — NA hat in R den Typ logical. drum_matrix hat Audiofile
-  # als character (echte Dateinamen). dplyr::bind_rows() lehnt diesen
-  # Typ-Konflikt seit dplyr 1.0+ / vctrs strikt ab.
-  # Fix: beide Spalten werden vor dem bind_rows() explizit auf
-  # denselben Typ gecastet (character / numeric), damit das Merging
-  # unabhängig vom jeweiligen NA-Typ in den Rohdaten funktioniert.
-  # Betrifft BEIDE bind_rows()-Aufrufe: hier (statischer Pfad,
-  # stratified_sampling = FALSE) und in sample_trials() unten
-  # (dynamischer Pfad, stratified_sampling = TRUE).
-  # ------------------------------------------------------------
-
   # If static test:
   easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
     dplyr::mutate(
-      Source    = "easy",
+      Source = "easy",
       Audiofile = as.character(Audiofile),
-      Seconds   = as.numeric(Seconds)
+      Seconds = as.numeric(Seconds)
     )
 
   drum_matrix <- drum_matrix %>%
     dplyr::mutate(
-      Source    = "normal",
+      Source = "normal",
       Audiofile = as.character(Audiofile),
-      Seconds   = as.numeric(Seconds)
+      Seconds = as.numeric(Seconds)
     )
 
   full_drum_matrix <- dplyr::bind_rows(easy_stimuli_drum_matrix, drum_matrix) %>%
@@ -231,36 +217,48 @@ one_button_page_trial_no <- function(trial_no, num_trials, text, demo = FALSE) {
 sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
   psychTestR::code_block(function(state, ...) {
 
-    # ------------------------------------------------------------
-    # BUGFIX (s. DMT() oben): Typ-Angleichung von Audiofile/Seconds
-    # auch hier im dynamischen Sampling-Pfad, da sample_trials() die
-    # Package-Objekte direkt liest (nicht die bereits gecasteten
-    # lokalen Kopien aus DMT()). Ohne diesen Cast schlägt bind_rows()
-    # fehl, weil easy_stimuli_drum_matrix$Audiofile logical (NA) ist
-    # und drum_matrix$Audiofile character ist.
-    # ------------------------------------------------------------
+    # Label
     easy_stimuli_drum_matrix <- easy_stimuli_drum_matrix %>%
       dplyr::mutate(
-        Source    = "easy",
+        Source = "easy",
         Audiofile = as.character(Audiofile),
-        Seconds   = as.numeric(Seconds)
+        Seconds = as.numeric(Seconds)
       )
 
     drum_matrix <- drum_matrix %>%
       dplyr::mutate(
-        Source    = "normal",
+        Source = "normal",
         Audiofile = as.character(Audiofile),
-        Seconds   = as.numeric(Seconds)
+        Seconds = as.numeric(Seconds)
       )
 
-    sample_stratum <- function(dat, half_label, n) {
+    # ----------------------------------------------------------------
+    # BUGFIX Punkt 3a: sample_stratum() gab bei zu wenigen verfuegbaren
+    # Stimuli in einem Stratum bisher STILLSCHWEIGEND weniger Trials
+    # zurueck als angefordert (durch min(n, nrow(stimuli))), ohne dass
+    # das irgendwo sichtbar wurde. Jetzt: sample_stratum() bekommt einen
+    # stratum_name (nur fuer Logging) und loggt eine explizite Warnung
+    # (logging::logwarn), wenn nicht genug Stimuli vorhanden sind. Das
+    # Verhalten selbst aendert sich NICHT (Test laeuft mit weniger
+    # Trials in diesem Stratum weiter) - es wird nur sichtbar gemacht.
+    # ----------------------------------------------------------------
+    sample_stratum <- function(dat, half_label, n, stratum_name) {
 
       stimuli <- dat %>%
         dplyr::filter(ComplexityHalves == half_label) %>%
         dplyr::distinct(Stimulus)
 
+      available <- nrow(stimuli)
+
+      if (available < n) {
+        logging::logwarn(
+          "sample_trials(): Stratum '%s' hat nur %i verfuegbare Stimuli, aber %i wurden angefordert. Es werden nur %i Trials aus diesem Stratum gesampelt - der Test laeuft mit insgesamt weniger Trials als num_trials weiter!",
+          stratum_name, available, n, available
+        )
+      }
+
       selected <- stimuli %>%
-        dplyr::slice_sample(n = min(n, nrow(stimuli)))
+        dplyr::slice_sample(n = min(n, available))
 
       dat %>%
         dplyr::semi_join(selected, by = "Stimulus")
@@ -310,34 +308,43 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
     }
 
     # --------------------------------------------------------------
-    # Stratum-Label mitführen, damit wir die Blockreihenfolge
+    # NEU: Stratum-Label mitführen, damit wir die Blockreihenfolge
     # (easy_easy -> easy_hard -> normal_easy -> normal_hard) am Ende
-    # erzwingen können.
+    # erzwingen können. Vorher ging dieses Label verloren, weshalb
+    # die TrialNo komplett zufällig über alle vier Gruppen vergeben
+    # wurde.
+    #
+    # stratum_name wird jetzt zusaetzlich an sample_stratum()
+    # durchgereicht (Punkt 3a - siehe Definition oben).
     # --------------------------------------------------------------
     sampled_drum_matrix <- dplyr::bind_rows(
 
       sample_stratum(
         easy_stimuli_drum_matrix,
         easy_easy,
-        allocation[["easy_easy"]]
+        allocation[["easy_easy"]],
+        stratum_name = "easy_easy"
       ) %>% dplyr::mutate(Stratum = "easy_easy"),
 
       sample_stratum(
         easy_stimuli_drum_matrix,
         easy_hard,
-        allocation[["easy_hard"]]
+        allocation[["easy_hard"]],
+        stratum_name = "easy_hard"
       ) %>% dplyr::mutate(Stratum = "easy_hard"),
 
       sample_stratum(
         drum_matrix,
         normal_easy,
-        allocation[["normal_easy"]]
+        allocation[["normal_easy"]],
+        stratum_name = "normal_easy"
       ) %>% dplyr::mutate(Stratum = "normal_easy"),
 
       sample_stratum(
         drum_matrix,
         normal_hard,
-        allocation[["normal_hard"]]
+        allocation[["normal_hard"]],
+        stratum_name = "normal_hard"
       ) %>% dplyr::mutate(Stratum = "normal_hard")
 
     )
@@ -352,8 +359,24 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
       dplyr::count(ComplexityHalves) %>%
       print()
 
+    # ----------------------------------------------------------------
+    # BUGFIX Punkt 3a (Fortsetzung): Gesamt-Kontrolle NACH dem Sampling.
+    # Selbst wenn kein einzelnes Stratum betroffen war, kann die Summe
+    # ueber alle vier Strata < num_trials sein (z.B. wenn mehrere
+    # Strata leicht knapp waren). Diese Warnung fasst das zusammen.
+    # ----------------------------------------------------------------
+    n_sampled <- dplyr::n_distinct(sampled_drum_matrix$Stimulus)
+
+    if (n_sampled < num_trials) {
+      logging::logwarn(
+        "sample_trials(): Insgesamt wurden nur %i von %i angeforderten Trials gesampelt (zu wenige verfuegbare Stimuli in mindestens einem Stratum - siehe Warnungen oben).",
+        n_sampled, num_trials
+      )
+    }
+
     # --------------------------------------------------------------
-    # TrialNo wird blockweise vergeben:
+    # NEU: TrialNo wird jetzt blockweise vergeben, nicht mehr komplett
+    # zufällig. Reihenfolge der Blöcke ist fest:
     #   easy_easy -> easy_hard -> normal_easy -> normal_hard
     # Innerhalb jedes Blocks bleibt die Stimulus-Reihenfolge zufällig.
     # --------------------------------------------------------------
