@@ -236,11 +236,17 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     # ==============================================================
     # TEMPORÄR – NUR DIAGNOSE (Bug B: Layer 3 zeigt manchmal 2 statt
-    # 1 Fehler). Nach Reproduktion/Analyse wieder entfernen.
+    # 1 Fehler). Nutzt message() statt logging::loginfo(), da
+    # 'logging' ohne konfigurierten Handler nichts ausgibt und im
+    # Shiny-Server-Log dadurch bislang GAR KEINE loginfo()-Zeilen
+    # ankamen. message() schreibt zuverlässig nach stderr, was
+    # Shiny Server ins Log übernimmt. Nach Reproduktion/Analyse
+    # wieder entfernen.
     # ==============================================================
-    logging::loginfo("DIAG sequencer_state class: %s", paste(class(input$sequencer_state), collapse = ","))
-    logging::loginfo("DIAG sequencer_state dim: %s", paste(dim(input$sequencer_state), collapse = "x"))
-    logging::loginfo("DIAG sequencer_state str: %s", paste(utils::capture.output(str(input$sequencer_state)), collapse = " | "))
+    message("=== DIAG START ===")
+    message("DIAG sequencer_state class: ", paste(class(input$sequencer_state), collapse = ","))
+    message("DIAG sequencer_state dim: ", paste(dim(input$sequencer_state), collapse = "x"))
+    message("DIAG sequencer_state str: ", paste(utils::capture.output(str(input$sequencer_state)), collapse = " | "))
     # ==============================================================
     # ENDE TEMPORÄRER DIAGNOSE-BLOCK
     # ==============================================================
@@ -269,6 +275,14 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         dplyr::select(Instrument, BeatPositionSixteenth)
 
     }
+
+    # ==============================================================
+    # TEMPORÄR – NUR DIAGNOSE
+    # ==============================================================
+    message("DIAG correct_answer: ", paste(utils::capture.output(print(correct_answer)), collapse = " | "))
+    # ==============================================================
+    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
+    # ==============================================================
 
     if (is_demo) {
 
@@ -307,7 +321,10 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     # ==============================================================
     # TEMPORÄR – NUR DIAGNOSE
     # ==============================================================
-    logging::loginfo("DIAG user_answer_df: %s", paste(utils::capture.output(print(user_answer_df)), collapse = " | "))
+    message("DIAG user_answer_df (nur UserSelected==1): ", paste(
+      utils::capture.output(print(dplyr::filter(user_answer_df, UserSelected == 1))),
+      collapse = " | "
+    ))
     # ==============================================================
     # ENDE TEMPORÄRER DIAGNOSE-BLOCK
     # ==============================================================
@@ -328,6 +345,17 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     }
 
+    # ==============================================================
+    # TEMPORÄR – NUR DIAGNOSE
+    # ==============================================================
+    message("DIAG compare (nur Mistake==TRUE): ", paste(
+      utils::capture.output(print(dplyr::filter(compare, Mistake == TRUE))),
+      collapse = " | "
+    ))
+    # ==============================================================
+    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
+    # ==============================================================
+
     inst_levels <- c("HiHat", "Snare", "Kick")
 
     res_summary <- compare %>%
@@ -344,7 +372,8 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     # ==============================================================
     # TEMPORÄR – NUR DIAGNOSE
     # ==============================================================
-    logging::loginfo("DIAG res_summary: %s", paste(utils::capture.output(print(res_summary)), collapse = " | "))
+    message("DIAG res_summary: ", paste(utils::capture.output(print(res_summary)), collapse = " | "))
+    message("=== DIAG ENDE ===")
     # ==============================================================
     # ENDE TEMPORÄRER DIAGNOSE-BLOCK
     # ==============================================================
