@@ -12,7 +12,8 @@ DMT(
   stratified_sampling = TRUE,
   custom_stratified_sampling_allocation = NULL,
   trial_timeout = 90,
-  language = "en"
+  language = "en",
+  with_id = TRUE
 )
 }
 \arguments{
@@ -21,6 +22,11 @@ DMT(
 \item{language}{Scalar character, one of DMT_languages() (currently
 "en", "de", "de_f"). Fixes the test to exactly this language — no other
 language is reachable in the resulting timeline, not even via URL param.}
+
+\item{with_id}{Whether to ask participants for a participant ID at the
+start of the test (default TRUE). If FALSE, the ID prompt page is
+skipped; psychTestR/the enclosing battery still assigns each participant
+an ID internally, so results saving is unaffected either way.}
 }
 \description{
 Embed Drum Machine Test in battery

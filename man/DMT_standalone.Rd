@@ -13,7 +13,8 @@ DMT_standalone(
   custom_stratified_sampling_allocation = NULL,
   trial_timeout = 90,
   language = "en",
-  admin_password,
+  with_id = TRUE,
+  admin_password = "conifer",
   researcher_email = "sebastian.silas@uni_hamburg.de"
 )
 }
@@ -21,10 +22,17 @@ DMT_standalone(
 \item{language}{Scalar character, one of DMT_languages() (currently
 "en", "de", "de_f"). Fixes the standalone test to exactly this language.}
 
-\item{admin_password}{Password required to access the psychTestR admin
-panel (reachable by appending \code{?admin=1} to the test URL). Must be
-set explicitly — there is no insecure default anymore. Choose a strong,
-non-guessable password before deploying to a public server.}
+\item{with_id}{Whether to ask participants for a participant ID at the
+start of the test (default TRUE). If FALSE, the ID prompt page is
+skipped; psychTestR still assigns each participant an automatically
+generated ID internally (via \code{test_options(auto_p_id = TRUE)}), so
+results saving is unaffected either way.}
+
+\item{admin_password}{Password to access the psychTestR admin panel
+(reachable by appending \code{?admin=1} to the test URL). Defaults to
+"conifer" (the convention used across psychTestR test batteries) so the
+admin panel is always available without extra setup. Pass a different,
+non-guessable password before deploying to a public-facing server.}
 
 \item{researcher_email}{Contact email shown to participants and used in
 the admin panel.}
