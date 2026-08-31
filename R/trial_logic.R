@@ -280,23 +280,6 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     logging::loginfo("dmt_get_answer stratified_sampling: %s", stratified_sampling)
 
-    # ==============================================================
-    # TEMPORÄR – NUR DIAGNOSE (Bug B: Layer 3 zeigt manchmal 2 statt
-    # 1 Fehler). Nutzt message() statt logging::loginfo(), da
-    # 'logging' ohne konfigurierten Handler nichts ausgibt und im
-    # Shiny-Server-Log dadurch bislang GAR KEINE loginfo()-Zeilen
-    # ankamen. message() schreibt zuverlässig nach stderr, was
-    # Shiny Server ins Log übernimmt. Nach Reproduktion/Analyse
-    # wieder entfernen.
-    # ==============================================================
-    message("=== DIAG START ===")
-    message("DIAG sequencer_state class: ", paste(class(input$sequencer_state), collapse = ","))
-    message("DIAG sequencer_state dim: ", paste(dim(input$sequencer_state), collapse = "x"))
-    message("DIAG sequencer_state str: ", paste(utils::capture.output(str(input$sequencer_state)), collapse = " | "))
-    # ==============================================================
-    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
-    # ==============================================================
-
     # If dynamic, use dynamically sampled drum matrix
     if(stratified_sampling) {
       drum_matrix <- psychTestR::get_global("sampled_trials", state)
@@ -321,14 +304,6 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         dplyr::select(Instrument, BeatPositionSixteenth)
 
     }
-
-    # ==============================================================
-    # TEMPORÄR – NUR DIAGNOSE
-    # ==============================================================
-    message("DIAG correct_answer: ", paste(utils::capture.output(print(correct_answer)), collapse = " | "))
-    # ==============================================================
-    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
-    # ==============================================================
 
     if (is_demo) {
 
@@ -364,23 +339,6 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         tidyr::pivot_longer(HiHat:Kick, names_to = "Instrument", values_to = "UserSelected")
     }
 
-    # ==============================================================
-    # TEMPORÄR – NUR DIAGNOSE
-    # ==============================================================
-    message("DIAG user_answer_df (nur UserSelected==1): ", paste(
-      utils::capture.output(
-        if ("UserSelected" %in% names(user_answer_df)) {
-          print(dplyr::filter(user_answer_df, UserSelected == 1))
-        } else {
-          print(user_answer_df)
-        }
-      ),
-      collapse = " | "
-    ))
-    # ==============================================================
-    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
-    # ==============================================================
-
     if(length(user_answer_df) == 0L) {
       compare <- correct_answer %>%
         dplyr::mutate(ShouldHaveSelected = TRUE,
@@ -395,20 +353,9 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
                          by = c("Instrument", "BeatPositionSixteenth")) %>%
         dplyr::mutate(ShouldHaveSelected = dplyr::case_when(is.na(ShouldHaveSelected) ~ FALSE, TRUE ~ ShouldHaveSelected),
                       Correct = ShouldHaveSelected & UserSelected == 1,
-                      Mistake = ShouldHaveSelected & UserSelected == 0 | !ShouldHaveSelected & UserSelected)
+                      Mistake = (ShouldHaveSelected & UserSelected == 0) | (!ShouldHaveSelected & UserSelected))
 
     }
-
-    # ==============================================================
-    # TEMPORÄR – NUR DIAGNOSE
-    # ==============================================================
-    message("DIAG compare (nur Mistake==TRUE): ", paste(
-      utils::capture.output(print(dplyr::filter(compare, Mistake == TRUE))),
-      collapse = " | "
-    ))
-    # ==============================================================
-    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
-    # ==============================================================
 
     # ----------------------------------------------------------------
     # BUGFIX Punkt 3b: dplyr::group_by(Instrument, .drop = FALSE) war
@@ -453,15 +400,6 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
         ProportionCorrect = dplyr::if_else(is.nan(ProportionCorrect), 1, ProportionCorrect)
       ) %>%
       complete_instruments(inst_levels = inst_levels)
-
-    # ==============================================================
-    # TEMPORÄR – NUR DIAGNOSE
-    # ==============================================================
-    message("DIAG res_summary: ", paste(utils::capture.output(print(res_summary)), collapse = " | "))
-    message("=== DIAG ENDE ===")
-    # ==============================================================
-    # ENDE TEMPORÄRER DIAGNOSE-BLOCK
-    # ==============================================================
 
     global_correct <- all(res_summary$NoMistakes == 0)
 

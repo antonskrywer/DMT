@@ -16,8 +16,21 @@
 
 # ------------------------------------------------------------------
 # Interner Helper: res_summary (3 Zeilen: HiHat/Snare/Kick) -> breites
-# 1-Zeilen-Tibble mit hihat_hits/hihat_n, snare_hits/snare_n,
-# kick_hits/kick_n, n_total_mistakes.
+# 1-Zeilen-Tibble mit hihat_hits/hihat_n/hihat_mistakes,
+# snare_hits/snare_n/snare_mistakes, kick_hits/kick_n/kick_mistakes,
+# n_total_mistakes.
+#
+# BUGFIX (MCMC-Adapter-Kompatibilitaet): <inst>_n ist IMMER NoPositions =
+# 16 (Gesamtgroesse des Grids), NICHT die Anzahl der fuer dieses
+# Instrument tatsaechlich erforderlichen Onsets - <inst>_hits kann daher
+# in echten Daten so gut wie nie <inst>_n erreichen. Der MCMC-Adapter
+# (mcmc_adapter_dmt.R::dmt_binarize_dim()) verglich bisher genau das
+# (hits == n) und haette ein Instrument damit fast immer als "falsch"
+# gewertet, auch bei 0 tatsaechlichen Fehlern. Deshalb jetzt explizite
+# <inst>_mistakes-Spalten (aus res_summary$NoMistakes) ergaenzt, damit der
+# Adapter analog zur global_correct-Logik (NoMistakes == 0) binarisieren
+# kann, statt sich auf den nicht dafuer geeigneten hits/n-Vergleich zu
+# verlassen.
 # ------------------------------------------------------------------
 
 dmt_res_summary_wide <- function(res_summary) {
@@ -29,12 +42,15 @@ dmt_res_summary_wide <- function(res_summary) {
   }
 
   tibble::tibble(
-    hihat_hits = get_val("HiHat", "NoHits"),
-    hihat_n    = get_val("HiHat", "NoPositions"),
-    snare_hits = get_val("Snare", "NoHits"),
-    snare_n    = get_val("Snare", "NoPositions"),
-    kick_hits  = get_val("Kick",  "NoHits"),
-    kick_n     = get_val("Kick",  "NoPositions"),
+    hihat_hits     = get_val("HiHat", "NoHits"),
+    hihat_n        = get_val("HiHat", "NoPositions"),
+    hihat_mistakes = get_val("HiHat", "NoMistakes"),
+    snare_hits     = get_val("Snare", "NoHits"),
+    snare_n        = get_val("Snare", "NoPositions"),
+    snare_mistakes = get_val("Snare", "NoMistakes"),
+    kick_hits      = get_val("Kick",  "NoHits"),
+    kick_n         = get_val("Kick",  "NoPositions"),
+    kick_mistakes  = get_val("Kick",  "NoMistakes"),
     n_total_mistakes = suppressWarnings(sum(res_summary$NoMistakes, na.rm = TRUE))
   )
 }
@@ -152,7 +168,9 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
       p_id, trial_no, stimulus_id, demo, source, complexity_half, complexity,
       attempt, cumulative_attempt, feedback_layer_shown,
       global_correct,
-      hihat_hits, hihat_n, snare_hits, snare_n, kick_hits, kick_n,
+      hihat_hits, hihat_n, hihat_mistakes,
+      snare_hits, snare_n, snare_mistakes,
+      kick_hits, kick_n, kick_mistakes,
       n_total_mistakes,
       timed_out, rt_ms, timestamp
     ) %>%

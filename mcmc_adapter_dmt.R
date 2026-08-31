@@ -12,7 +12,7 @@
 #     als gesetzter Schwierigkeitswert; Revision erst nach Kalibrierungs-
 #     studie).
 #   - "korrekt" pro Dimension (HiHat/Snare/Kick) = binär: 1 nur bei 0
-#     Fehlern (hits == 16), analog zur global_correct-Logik in
+#     Fehlern (<dim>_mistakes == 0), analog zur global_correct-Logik in
 #     dmt_get_answer() / complete_instruments().
 #   - Zwei Zeitachsen-Varianten, parallel:
 #       INTRA:  theta wächst nach JEDEM Attempt, D_t = D_i * gamma_layer[attempt]
@@ -37,12 +37,21 @@ library(tibble)
 # -----------------------------------------------------------------------
 
 #' Binärer Korrektheits-Indikator pro Dimension
+#'
+#' BUGFIX (MCMC-Adapter-Kompatibilitaet): verglich frueher hits == n. In
+#' echten DMT_results_to_long()-Daten ist <dim>_n aber IMMER 16
+#' (NoPositions = Gesamtgroesse des Grids), nicht die Anzahl der fuer
+#' dieses Instrument tatsaechlich erforderlichen Onsets - <dim>_hits
+#' erreicht das in der Praxis fast nie, auch bei perfekter Antwort. Der
+#' Simulator (simulate_dmt_results_long.R) hat das nicht aufgedeckt, weil
+#' er hits/n dort intern zueinander konsistent erzeugt. Jetzt stattdessen
+#' <dim>_mistakes == 0 (aus res_summary$NoMistakes, siehe results.R),
+#' analog zur global_correct-Logik in dmt_get_answer().
 #' @keywords internal
 dmt_binarize_dim <- function(df, dimension) {
-  hits_col <- paste0(tolower(dimension), "_hits")
-  n_col    <- paste0(tolower(dimension), "_n")
-  stopifnot(all(c(hits_col, n_col) %in% names(df)))
-  as.integer(df[[hits_col]] == df[[n_col]])
+  mistakes_col <- paste0(tolower(dimension), "_mistakes")
+  stopifnot(mistakes_col %in% names(df))
+  as.integer(df[[mistakes_col]] == 0)
 }
 
 #' Long-Tibble EINER Person in die Zeilenstruktur bringen, die der
