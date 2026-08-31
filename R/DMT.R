@@ -8,10 +8,16 @@
 #' @param trial_timeout
 #' @param language Scalar character, one of DMT_languages() (currently
 #' "en", "de", "de_f"). Fixes the standalone test to exactly this language.
-#' @param admin_password Password required to access the psychTestR admin
-#' panel (reachable by appending \code{?admin=1} to the test URL). Must be
-#' set explicitly — there is no insecure default anymore. Choose a strong,
-#' non-guessable password before deploying to a public server.
+#' @param with_id Whether to ask participants for a participant ID at the
+#' start of the test (default TRUE). If FALSE, the ID prompt page is
+#' skipped; psychTestR still assigns each participant an automatically
+#' generated ID internally (via \code{test_options(auto_p_id = TRUE)}), so
+#' results saving is unaffected either way.
+#' @param admin_password Password to access the psychTestR admin panel
+#' (reachable by appending \code{?admin=1} to the test URL). Defaults to
+#' "conifer" (the convention used across psychTestR test batteries) so the
+#' admin panel is always available without extra setup. Pass a different,
+#' non-guessable password before deploying to a public-facing server.
 #' @param researcher_email Contact email shown to participants and used in
 #' the admin panel.
 #'
@@ -27,14 +33,12 @@ DMT_standalone <- function(tempo = 100,
                            custom_stratified_sampling_allocation = NULL,
                            trial_timeout = 90,
                            language = "en",
-                           admin_password,
+                           with_id = TRUE,
+                           admin_password = "conifer",
                            researcher_email = "sebastian.silas@uni_hamburg.de") {
 
-  if (missing(admin_password) || !is.scalar.character(admin_password) || nchar(admin_password) < 8) {
-    stop(
-      "admin_password must be supplied as a character string with at least ",
-      "8 characters. Example: DMT_standalone(admin_password = 'a_strong_password_here')"
-    )
+  if (!is.scalar.character(admin_password)) {
+    stop("admin_password must be supplied as a single character string.")
   }
 
   DMT(tempo = tempo,
@@ -44,7 +48,8 @@ DMT_standalone <- function(tempo = 100,
       stratified_sampling = stratified_sampling,
       custom_stratified_sampling_allocation = custom_stratified_sampling_allocation,
       trial_timeout = trial_timeout,
-      language = language
+      language = language,
+      with_id = with_id
   ) %>%
     psychTestR::make_test(
       opt = psychTestR::test_options(
@@ -53,7 +58,28 @@ DMT_standalone <- function(tempo = 100,
         enable_admin_panel = TRUE,
         researcher_email = researcher_email,
         languages = language,
-        display = psychTestR::display_options(full_screen = TRUE),
+        # ------------------------------------------------------------
+        # BUGFIX (Admin-Panel unsichtbar): display_options(full_screen =
+        # TRUE) schaltet intern NICHT nur Header/Raender ab, sondern auch
+        # show_footer <- FALSE (siehe display_options()-Quellcode in
+        # psychTestR). Der Admin-Panel-Link ("Admin login") wird aber
+        # genau in diesem Footer-<div> gerendert - unabhaengig vom
+        # admin_panel-Flag, das fuer sich allein nichts nuetzt, wenn der
+        # ganze Footer per hidden-Attribut versteckt ist. Deshalb zeigte
+        # der DMT (anders als z.B. SLT, das full_screen gar nicht setzt)
+        # unten keinen Admin-Login-Link mehr an.
+        # Fix: dieselben full_screen-Effekte (kein Header, keine seitl.
+        # Raender/Rahmen fuer die volle Grid-Breite) manuell setzen, aber
+        # show_footer explizit TRUE lassen, damit der Admin-Panel-Link
+        # sichtbar bleibt.
+        # ------------------------------------------------------------
+        display = psychTestR::display_options(
+          show_header  = FALSE,
+          show_footer  = TRUE,
+          left_margin  = 0L,
+          right_margin = 0L,
+          content_border = "0px"
+        ),
         additional_scripts = "https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"
       )
     )
@@ -69,6 +95,10 @@ DMT_standalone <- function(tempo = 100,
 #' @param language Scalar character, one of DMT_languages() (currently
 #' "en", "de", "de_f"). Fixes the test to exactly this language — no other
 #' language is reachable in the resulting timeline, not even via URL param.
+#' @param with_id Whether to ask participants for a participant ID at the
+#' start of the test (default TRUE). If FALSE, the ID prompt page is
+#' skipped; psychTestR/the enclosing battery still assigns each participant
+#' an ID internally, so results saving is unaffected either way.
 #'
 #' @returns
 #' @export
@@ -81,7 +111,8 @@ DMT <- function(num_trials = 5L,
                 stratified_sampling = TRUE,
                 custom_stratified_sampling_allocation = NULL,
                 trial_timeout = 90,
-                language = "en") {
+                language = "en",
+                with_id = TRUE) {
 
 
   if(!is.null(custom_stratified_sampling_allocation) && sum(unlist(custom_stratified_sampling_allocation)) != num_trials) {
@@ -175,7 +206,7 @@ DMT <- function(num_trials = 5L,
     psychTestR::join(
 
       # Intro
-      DMT_intro(tempo),
+      DMT_intro(tempo, with_id),
 
       if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback),
 
@@ -287,6 +318,46 @@ resolve_stratum_allocation <- function(easy_stimuli_drum_matrix,
                                        num_trials,
                                        custom_stratified_sampling_allocation) {
 
+  # ----------------------------------------------------------------
+  # BUGFIX (Kollegen-Feedback Bug 3, Crash): check_sampling_allocation()
+  # prueft nur, ob die uebergebenen Namen eine TEILMENGE der 4 gueltigen
+  # Strata sind - eine custom_stratified_sampling_allocation mit nur
+  # 2 von 4 Strata (z.B. list(easy_easy = 2, easy_hard = 2)) wurde also
+  # bisher stillschweigend akzeptiert, obwohl normal_easy/normal_hard
+  # dann komplett fehlten. resolve_stratum_allocation()$allocation[[...]]
+  # wurde fuer diese Strata dadurch NULL, was spaeter in sample_stratum()
+  # bei "if (available < n)" mit NULL als n zu "Error in if: Argument hat
+  # Laenge 0" fuehrte (Crash beim Uebergang von Trial 3 zu Trial 4).
+  #
+  # Fix (Nutzer-Entscheidung: hart validieren statt fehlende Strata
+  # stillschweigend auf 0 zu setzen): Wenn eine custom Allocation
+  # angegeben wird, MUESSEN alle 4 Strata-Namen explizit vorkommen (auch
+  # mit 0, falls ein Stratum bewusst nicht verwendet werden soll).
+  # Hier statt in check_sampling_allocation() geprueft, weil
+  # resolve_stratum_allocation() die einzige Stelle ist, die sowohl von
+  # DMT() (Build-Time) als auch von sample_trials() (Runtime) genutzt
+  # wird - so kann die Pruefung nicht an einer der beiden Stellen
+  # vergessen werden (vgl. Punkt 7 in CLAUDE.md).
+  # ----------------------------------------------------------------
+  required_strata <- c("easy_easy", "easy_hard", "normal_easy", "normal_hard")
+
+  if (!is.null(custom_stratified_sampling_allocation)) {
+
+    missing_strata <- setdiff(required_strata, names(custom_stratified_sampling_allocation))
+    unknown_strata <- setdiff(names(custom_stratified_sampling_allocation), required_strata)
+
+    if (length(missing_strata) > 0 || length(unknown_strata) > 0) {
+      stop(
+        "custom_stratified_sampling_allocation muss genau die 4 Strata '",
+        paste(required_strata, collapse = "', '"),
+        "' enthalten (auch mit 0 Trials, falls ein Stratum bewusst nicht ",
+        "verwendet werden soll).",
+        if (length(missing_strata) > 0) paste0(" Es fehlen: ", paste(missing_strata, collapse = ", "), "."),
+        if (length(unknown_strata) > 0) paste0(" Unbekannt: ", paste(unknown_strata, collapse = ", "), ".")
+      )
+    }
+  }
+
   get_halves <- function(dat) {
     dat %>%
       dplyr::group_by(ComplexityHalves) %>%
@@ -357,6 +428,95 @@ resolved_n_sampled <- function(resolved) {
   ))
 }
 
+# ----------------------------------------------------------------------
+# BUGFIX Punkt 4 (CLAUDE.md): Innerhalb eines Stratums (v.a. in den
+# leichteren Straten easy_easy/easy_hard/normal_easy) enthaelt der
+# Item-Pool teils Stimuli, die sich nur in 1-2 Onsets unterscheiden
+# (z.B. Easy_2 vs. Easy_8: nur ein einziger Kick-Onset verschoben).
+# Empirisch: 6-12% aller Stimulus-Paare in diesen Straten haben eine
+# Hamming-Distanz <= 2 (von max. 48 moeglichen Positionen). Bei rein
+# zufaelligem Sampling landen manche Probanden dadurch mehrere fast
+# identische Patterns in derselben Sitzung (vom Nutzer berichtet:
+# Trials wirkten wie Wiederholungen). resolve_stratum_allocation()/
+# sample_stratum() sampeln deshalb jetzt so, dass die pro Proband
+# gezogenen Stimuli eines Stratums einen Mindestabstand einhalten -
+# die Item-Bank und ihre Complexity-Werte (relevant fuer ISLP/IRT)
+# bleiben dabei unveraendert, es aendert sich nur die zufaellige
+# Auswahl pro Sitzung.
+# ----------------------------------------------------------------------
+
+# Baut je Stimulus einen 48-elementigen Binaervektor (16 Positionen x 3
+# Instrumente: HiHat 1-16, Snare 17-32, Kick 33-48) fuer den
+# Hamming-Distanz-Vergleich.
+stimulus_onset_matrix <- function(df, inst_levels = c("HiHat", "Snare", "Kick")) {
+
+  stim_ids <- unique(df$Stimulus)
+
+  m <- matrix(
+    0L,
+    nrow = length(stim_ids),
+    ncol = 16L * length(inst_levels),
+    dimnames = list(stim_ids, NULL)
+  )
+
+  inst_idx <- match(df$Instrument, inst_levels)
+  col      <- (inst_idx - 1L) * 16L + df$BeatPositionSixteenth
+  row      <- match(df$Stimulus, stim_ids)
+
+  m[cbind(row, col)] <- 1L
+
+  m
+}
+
+# Zieht n Stimulus-IDs aus stimulus_ids, deren paarweise Hamming-Distanz
+# (in onset_matrix) mindestens min_distance betraegt. Versucht zunaechst
+# reines Zufalls-Resampling (schnell, da Kollisionen selten sind); falls
+# das nach max_random_attempts Versuchen nicht gelingt, folgt ein
+# greedy Fallback, der min_distance in 1er-Schritten lockert, bis eine
+# vollstaendige Auswahl zustande kommt (terminiert spaetestens bei
+# min_distance = 0, d.h. ohne Einschraenkung - stellt sicher, dass das
+# Sampling nie haengen bleibt oder crasht).
+sample_stimuli_min_distance <- function(stimulus_ids, onset_matrix, n, min_distance = 3, max_random_attempts = 200) {
+
+  if (n <= 0) return(character(0))
+  if (n >= length(stimulus_ids)) return(stimulus_ids)
+  if (n == 1) return(sample(stimulus_ids, 1))
+
+  pairwise_ok <- function(ids, threshold) {
+    pairs <- utils::combn(ids, 2, simplify = FALSE)
+    all(vapply(pairs, function(p) sum(onset_matrix[p[1], ] != onset_matrix[p[2], ]) >= threshold, logical(1)))
+  }
+
+  for (i in seq_len(max_random_attempts)) {
+    candidate <- sample(stimulus_ids, n)
+    if (pairwise_ok(candidate, min_distance)) return(candidate)
+  }
+
+  for (threshold in seq(min_distance, 0, by = -1)) {
+
+    shuffled <- sample(stimulus_ids)
+    picked   <- shuffled[1]
+
+    for (id in shuffled[-1]) {
+      if (length(picked) >= n) break
+      dists <- vapply(picked, function(p) sum(onset_matrix[p, ] != onset_matrix[id, ]), numeric(1))
+      if (all(dists >= threshold)) picked <- c(picked, id)
+    }
+
+    if (length(picked) >= n) {
+      if (threshold < min_distance) {
+        logging::logwarn(
+          "sample_stimuli_min_distance(): Mindestabstand %i mit %i von %i verfuegbaren Stimuli nicht erreichbar, auf %i gelockert.",
+          min_distance, n, length(stimulus_ids), threshold
+        )
+      }
+      return(picked[seq_len(n)])
+    }
+  }
+
+  sample(stimulus_ids, n)
+}
+
 sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
   psychTestR::code_block(function(state, ...) {
 
@@ -404,13 +564,20 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
         )
       }
 
-      selected <- s$dat %>%
-        dplyr::filter(ComplexityHalves == s$half) %>%
-        dplyr::distinct(Stimulus) %>%
-        dplyr::slice_sample(n = min(n, available))
+      stratum_dat <- s$dat %>%
+        dplyr::filter(ComplexityHalves == s$half)
 
-      s$dat %>%
-        dplyr::semi_join(selected, by = "Stimulus")
+      # BUGFIX Punkt 4: Mindestabstand statt reinem Zufalls-Sampling
+      # (siehe sample_stimuli_min_distance() oben).
+      onset_matrix <- stimulus_onset_matrix(stratum_dat)
+      stimulus_ids <- unique(stratum_dat$Stimulus)
+
+      selected_ids <- sample_stimuli_min_distance(
+        stimulus_ids, onset_matrix, n = min(n, available), min_distance = 3
+      )
+
+      stratum_dat %>%
+        dplyr::filter(Stimulus %in% selected_ids)
     }
 
     # --------------------------------------------------------------

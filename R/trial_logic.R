@@ -105,7 +105,7 @@ DMT_page_loop <- function(trial_no,
 
         # Feedback
 
-        if (with_feedback && !show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo, stratified_sampling = stratified_sampling),
+        if (with_feedback && !show_solution) DMT_feedback(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = demo, stratified_sampling = stratified_sampling, trial_timeout = trial_timeout),
 
         # Update count
         psychTestR::code_block(function(state, ...) {
@@ -220,6 +220,52 @@ DMT_trial_page <- function(trial_no,
     save_answer = should_collect
   )
 
+}
+
+# ----------------------------------------------------------------------
+# BUGFIX (Kollegen-Feedback Bug 1): Eine Note, die der Teilnehmer nur um
+# eine Position verschoben eintraegt (z.B. Position 12 statt der
+# korrekten Position 13), wurde bisher als 2 GETRENNTE Fehler gezaehlt
+# (1x die korrekte Position 13 fehlt, 1x Position 12 wurde faelschlich
+# gesetzt) - fuer den Teilnehmer sieht das nach nur 1 Fehler aus.
+#
+# Fix (Nutzer-Entscheidung): Pro Instrument werden fehlende Pflicht-
+# Positionen mit falsch gesetzten Positionen gepaart, wenn sie hoechstens
+# 1 Sechzehntel auseinanderliegen (naechstliegendes Paar zuerst, danach
+# das naechste usw.). Jedes so gefundene Paar zaehlt als 1 Fehler statt 2.
+# Positionen, die keinen Partner in dieser Naehe finden, zaehlen weiterhin
+# einzeln. Aendert NICHT die einzelnen Mistake-Zellen in `compare`
+# (weiterhin pro Zelle korrekt, relevant fuer andere Auswertungen) -
+# betrifft nur die aggregierte NoMistakes-Zahl pro Instrument.
+# ----------------------------------------------------------------------
+count_paired_mistakes <- function(missed_positions, extra_positions, max_pair_distance = 1) {
+
+  if (length(missed_positions) == 0 || length(extra_positions) == 0) {
+    return(length(missed_positions) + length(extra_positions))
+  }
+
+  candidates <- expand.grid(missed = missed_positions, extra = extra_positions)
+  candidates$dist <- abs(candidates$missed - candidates$extra)
+  candidates <- candidates[candidates$dist <= max_pair_distance, , drop = FALSE]
+  candidates <- candidates[order(candidates$dist), , drop = FALSE]
+
+  used_missed <- numeric(0)
+  used_extra  <- numeric(0)
+  n_pairs     <- 0L
+
+  if (nrow(candidates) > 0) {
+    for (i in seq_len(nrow(candidates))) {
+      m <- candidates$missed[i]
+      e <- candidates$extra[i]
+      if (!(m %in% used_missed) && !(e %in% used_extra)) {
+        used_missed <- c(used_missed, m)
+        used_extra  <- c(used_extra, e)
+        n_pairs     <- n_pairs + 1L
+      }
+    }
+  }
+
+  (length(missed_positions) + length(extra_positions)) - n_pairs
 }
 
 dmt_get_answer <- function(drum_matrix, stratified_sampling) {
@@ -337,7 +383,9 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     if(length(user_answer_df) == 0L) {
       compare <- correct_answer %>%
-        dplyr::mutate(Correct = 0L,
+        dplyr::mutate(ShouldHaveSelected = TRUE,
+                      UserSelected = 0L,
+                      Correct = 0L,
                       Mistake = 1L)
 
     } else {
@@ -393,7 +441,10 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
       dplyr::group_by(Instrument, .drop = FALSE) %>%
       dplyr::summarise(
         ProportionCorrect = mean(Correct, na.rm = TRUE),
-        NoMistakes = sum(Mistake, na.rm = TRUE),
+        NoMistakes = count_paired_mistakes(
+          BeatPositionSixteenth[Mistake & ShouldHaveSelected],
+          BeatPositionSixteenth[Mistake & !ShouldHaveSelected]
+        ),
         NoHits = sum(Correct, na.rm = TRUE),
         .groups = "drop"
       ) %>%

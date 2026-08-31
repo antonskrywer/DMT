@@ -148,6 +148,17 @@ window.initDMT = function () {
   if (window.initialSequencerState !== null &&
       window.initialSequencerState !== undefined) {
     loadSequencer(window.initialSequencerState);
+  } else {
+    // BUGFIX: ohne diesen Reset behaelt Shiny serverseitig den
+    // sequencer_state-Wert der VORHERIGEN Seite, solange der Nutzer auf
+    // der neuen (visuell leeren) Seite keine einzige Zelle anklickt.
+    // Klickt er dann direkt auf Next, wertet dmt_get_answer() faelschlich
+    // das alte Pattern der letzten Seite als Antwort - z.B. ein zuvor
+    // korrekt geloestes Practice-Pattern, was zu einer faelschlich als
+    // "Correct!" gewerteten leeren Eingabe fuehren kann.
+    if (window.Shiny) {
+      Shiny.setInputValue("sequencer_state", matrix, { priority: "event" });
+    }
   }
 
   // --------------------------------------------------

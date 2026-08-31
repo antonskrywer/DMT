@@ -11,7 +11,7 @@
 # damit die restliche Trial-Logik (dmt_get_answer(), complete_instruments())
 # nicht angefasst werden muss.
 
-DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = FALSE, stratified_sampling = TRUE) {
+DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = FALSE, stratified_sampling = TRUE, trial_timeout = NULL) {
 
   psychTestR::reactive_page(function(state, answer, ...) {
 
@@ -34,10 +34,11 @@ DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo
       tempo = tempo,
       attempt = attempt,
       show_solution = show_solution,
-      show_input_grid = attempt == 4L,
+      show_input_grid = show_solution,
       demo = demo,
       show_play_buttons = FALSE,
       stimulus_drum_matrix = stimulus_drum_matrix,
+      trial_timeout = trial_timeout,
       stratified_sampling = stratified_sampling,
       collect_answer = FALSE
     )

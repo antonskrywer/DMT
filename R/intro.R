@@ -4,7 +4,7 @@
 # psychTestR::i18n() und Keys aus DMT_dict. Funktioniert nur innerhalb
 # des new_timeline(dict = DMT_dict)-Wrappers in DMT.R.
 
-DMT_intro <- function(tempo) {
+DMT_intro <- function(tempo, with_id = TRUE) {
 
   psychTestR::join(
 
@@ -22,9 +22,13 @@ DMT_intro <- function(tempo) {
     ),
 
     # --------------------------------------------------
-    # 1.2 Get participant ID
+    # 1.2 Get participant ID (optional, siehe with_id-Argument von
+    # DMT()/DMT_standalone(). Wird diese Seite uebersprungen, vergibt
+    # psychTestR ueber test_options(auto_p_id = TRUE) trotzdem
+    # automatisch eine ID pro Teilnehmer - das Speichern der Ergebnisse
+    # ist also auch ohne diese Seite nicht betroffen.)
     # --------------------------------------------------
-    psychTestR::get_p_id(),
+    if (with_id) psychTestR::get_p_id(),
 
     # --------------------------------------------------
     # 2. General reassurance
