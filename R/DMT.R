@@ -212,11 +212,30 @@ DMT <- function(num_trials = 5L,
 
       psychTestR::one_button_page(psychTestR::i18n("READY_MESSAGE"), button_text = psychTestR::i18n("CONTINUE")),
 
+      # BUGFIX (leerer output/results/-Ordner, siehe Uebergabe-Chat):
+      # psychTestR speichert output/sessions/<p_id>/data.RDS automatisch bei
+      # jedem Seitenwechsel (save_session(), intern via next_page()), aber
+      # output/results/ (das, was das Admin-Panel unter "all rds" zippt)
+      # wird NUR befuellt, wenn die Timeline explizit ein
+      # elt_save_results_to_disk()-Element enthaelt. Das fehlte hier komplett
+      # - der Ordner blieb deshalb dauerhaft leer, unabhaengig davon, wie
+      # viele Teilnehmer den Test durchlaufen haben.
+      # Zwischenspeicherung (complete = FALSE) hier nach der Trainingsphase,
+      # damit auch Abbrecher (die z.B. nur die Demo machen) im "all rds"-
+      # Download auftauchen. Wiederholte Aufrufe von
+      # elt_save_results_to_disk() fuer dieselbe Session ueberschreiben die
+      # vorherige Datei (siehe save_results_to_disk(): unlink(previous_save_path)),
+      # es sammeln sich also keine Datei-Leichen pro Teilnehmer an.
+      psychTestR::elt_save_results_to_disk(complete = FALSE),
+
       # Sample main trials
       if(stratified_sampling) sample_trials(num_trials, custom_stratified_sampling_allocation),
 
       # Main Trials
       DMT_main_trials(main_trial_count, tempo, with_feedback, trial_timeout, stratified_sampling, full_drum_matrix),
+
+      # Finaler Save: kompletter Durchlauf, komplett=TRUE.
+      psychTestR::elt_save_results_to_disk(complete = TRUE),
 
       psychTestR::final_page(psychTestR::i18n("FINAL_MESSAGE"))
     ),
@@ -226,13 +245,20 @@ DMT <- function(num_trials = 5L,
 }
 
 DMT_main_trials <- function(num_trials, tempo, with_feedback, trial_timeout = 90, stratified_sampling, drum_matrix) {
-  purrr::map(1:num_trials, ~ DMT_page_loop(trial_no = .x,
-                                           num_trials = num_trials,
-                                           tempo = tempo,
-                                           with_feedback = with_feedback,
-                                           trial_timeout = trial_timeout,
-                                           stratified_sampling = stratified_sampling,
-                                           stimulus_drum_matrix = drum_matrix)) %>% unlist()
+  purrr::map(1:num_trials, ~ psychTestR::join(
+    DMT_page_loop(trial_no = .x,
+                  num_trials = num_trials,
+                  tempo = tempo,
+                  with_feedback = with_feedback,
+                  trial_timeout = trial_timeout,
+                  stratified_sampling = stratified_sampling,
+                  stimulus_drum_matrix = drum_matrix),
+    # Zwischenspeicherung nach jedem Haupt-Trial (complete = FALSE), damit
+    # Abbrecher waehrend der eigentlichen Testphase mit ihren bis dahin
+    # abgeschlossenen Trials im "all rds"-Download landen (siehe Kommentar
+    # zum ersten elt_save_results_to_disk()-Aufruf oben in DMT()).
+    psychTestR::elt_save_results_to_disk(complete = FALSE)
+  )) %>% unlist()
 }
 
 DMT_training <- function(num_examples, tempo, with_feedback) {
