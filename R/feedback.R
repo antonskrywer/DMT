@@ -21,6 +21,13 @@ DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo
     feedback <- parse_feedback(answer, feedback_layer,
                                trial_no, num_trials, tempo)
 
+    if (isTRUE(answer$timed_out)) {
+      feedback <- shiny::tags$div(
+        shiny::tags$p(shiny::tags$strong(psychTestR::i18n("FEEDBACK_TIME_UP"))),
+        feedback
+      )
+    }
+
     show_solution <- feedback_layer == 4 && !answer$global_correct
 
     if(stratified_sampling && !demo) {

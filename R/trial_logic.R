@@ -15,7 +15,7 @@ DMT_page_loop <- function(trial_no,
                           stimulus_drum_matrix = drum_matrix,
                           show_solution = FALSE,
                           with_feedback = TRUE,
-                          trial_timeout = NULL,
+                          trial_timeout = 90,
                           stratified_sampling = TRUE) {
 
   logging::loginfo("trial_no: %s", trial_no)
@@ -201,7 +201,7 @@ DMT_trial_page <- function(trial_no,
     ),
     psychTestR::trigger_button(
       "next",
-      psychTestR::i18n("BUTTON_NEXT"),
+      psychTestR::i18n(if (collect_answer) "BUTTON_CHECK" else "BUTTON_NEXT"),
       onclick = if(show_solution)
         "if(window.stopDMT){ window.stopDMT();resetSequencer();}"
       else
@@ -442,7 +442,8 @@ dmt_ui <- function(trial_no,
                    show_play_buttons = TRUE,
                    demo = FALSE,
                    trial_timeout = 90,
-                   initial_state = NULL) {
+                   initial_state = NULL,
+                   intro_config = NULL) {
 
 
   initial_state_json <-
@@ -471,7 +472,13 @@ dmt_ui <- function(trial_no,
 
     if(show_play_buttons) shiny::fluidRow(
       if(!is.null(stimulus_json)) shiny::actionButton("play_stimulus", psychTestR::i18n("BUTTON_PLAY_STIMULUS")),
-      if(!demo) shiny::actionButton("play_sequencer", psychTestR::i18n("BUTTON_PLAY_PATTERN"))
+      shiny::actionButton("play_sequencer", psychTestR::i18n("BUTTON_PLAY_PATTERN"))
+    ),
+
+    if(show_play_buttons) shiny::tags$div(
+      style = "display: none;",
+      shiny::tags$span(id = "lbl_stop_stimulus", psychTestR::i18n("BUTTON_STOP_STIMULUS")),
+      shiny::tags$span(id = "lbl_stop_pattern", psychTestR::i18n("BUTTON_STOP_PATTERN"))
     ),
 
     shiny::tags$br(),
@@ -527,9 +534,11 @@ dmt_ui <- function(trial_no,
         '
     window.drumStimulus = %s;
     window.showSolution = %s;
+    window.dmtIntroConfig = %s;
     ',
-        stimulus_json,
-        tolower(show_solution)
+        if (is.null(stimulus_json)) "null" else stimulus_json,
+        tolower(show_solution),
+        if (is.null(intro_config)) "null" else jsonlite::toJSON(intro_config, auto_unbox = TRUE)
       )
     ),
 
@@ -610,6 +619,11 @@ timeout_js <- function(show_solution, trial_timeout) {
     shiny::tags$script(sprintf("
       clearTimeout(window.dmtTrialTimeout);
 
+      // Shiny-Input behaelt seinen Wert seitenuebergreifend -> pro Seite
+      // zuruecksetzen, sonst wuerde ein frueherer Timeout weiterwirken.
+      window.dmtTimedOut = false;
+      if (window.Shiny) Shiny.setInputValue('dmtTimedOut', false, {priority: 'event'});
+
       window.dmtTrialTimeout = setTimeout(function(){
 
         if(window.stopDMT){
@@ -617,6 +631,7 @@ timeout_js <- function(show_solution, trial_timeout) {
         }
 
         window.dmtTimedOut = true;
+        if (window.Shiny) Shiny.setInputValue('dmtTimedOut', true, {priority: 'event'});
 
         document.getElementById('next').click();
 

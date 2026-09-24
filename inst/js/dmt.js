@@ -35,6 +35,14 @@ window.resetDMT = function () {
 
 window.initDMT = function () {
 
+  // Tone.js kann (v.a. auf der ersten Seite) noch nachladen
+  if (!window.Tone) {
+    setTimeout(window.initDMT, 100);
+    return;
+  }
+
+  // Instruktions-Seiten: { lockGrid, highlightRow, demo } (siehe intro.R)
+  const cfg = window.dmtIntroConfig || {};
 
   // --------------------------------------------------
   // 🎯 READ TEMPO FROM SHINY
@@ -96,7 +104,7 @@ window.initDMT = function () {
 
         cell.onclick = function () {
 
-          if (stimulusRunning) return;
+          if (stimulusRunning || cfg.lockGrid) return;
 
           matrix[r][c] = matrix[r][c] ? 0 : 1;
           cell.classList.toggle("active");
@@ -113,6 +121,21 @@ window.initDMT = function () {
   }
 
   buildGrid();
+
+  if (cfg.lockGrid) {
+    const wrapper = document.getElementById("sequencer-wrapper");
+    if (wrapper) wrapper.classList.add("locked");
+  }
+
+  if (cfg.highlightRow !== undefined && cfg.highlightRow !== null) {
+    const labels = document.querySelectorAll(".sequencer .inst");
+    for (let r = 0; r < rows; r++) {
+      const cls = (r === cfg.highlightRow) ? "highlighted" : "dimmed";
+      if (labels[r]) labels[r].classList.add(cls);
+      const rowDiv = document.getElementById("row" + r);
+      if (rowDiv) rowDiv.classList.add(cls);
+    }
+  }
 
 
   function loadSequencer(state) {
@@ -235,11 +258,48 @@ window.initDMT = function () {
   // AUDIO
   // --------------------------------------------------
 
-  const drum = new Tone.Players({
-    HiHat: "audio/hihat.wav",
-    Snare: "audio/snare.wav",
-    Kick: "audio/kick.wav"
-  }).toDestination();
+  // Einmal pro Tone-Instanz laden und seitenuebergreifend wiederverwenden
+  // (sonst wird bei jedem Seitenwechsel neu geladen/dekodiert und die ersten
+  // Schlaege koennen "buffer not loaded" ausloesen).
+  if (!window.dmtDrum || window.dmtDrumTone !== Tone) {
+    window.dmtDrum = new Tone.Players({
+      HiHat: "audio/hihat.wav",
+      Snare: "audio/snare.wav",
+      Kick: "audio/kick.wav"
+    }).toDestination();
+    window.dmtDrumTone = Tone;
+    window.dmtLastStart = {};
+  }
+  const drum = window.dmtDrum;
+
+  // Tone wirft "Start time must be strictly greater than previous start
+  // time", wenn ein Player mit gleicher/frueherer Startzeit erneut gestartet
+  // wird (z.B. bei schnellem Stop/Start innerhalb der Lookahead-Zeit).
+  window.dmtLastStart = window.dmtLastStart || {};
+
+  function playSample(inst, time) {
+    const p = drum.player(inst);
+    if (!p.loaded) return;
+    if (window.dmtLastStart[inst] !== undefined && time <= window.dmtLastStart[inst]) return;
+    window.dmtLastStart[inst] = time;
+    p.start(time);
+  }
+
+  // Beschriftungen der Stop-Buttons kommen (uebersetzt) aus versteckten
+  // Spans in dmt_ui(); Fallback englisch.
+  function labelFromDom(id, fallback) {
+    const el = document.getElementById(id);
+    const txt = el ? el.textContent.trim() : "";
+    return txt || fallback;
+  }
+
+  const stimBtn = document.getElementById("play_stimulus");
+  const seqBtn = document.getElementById("play_sequencer");
+
+  const labelPlayStimulus = stimBtn ? stimBtn.innerText : "Play stimulus";
+  const labelPlayPattern = seqBtn ? seqBtn.innerText : "Play your pattern";
+  const labelStopStimulus = labelFromDom("lbl_stop_stimulus", "Stop stimulus");
+  const labelStopPattern = labelFromDom("lbl_stop_pattern", "Stop your pattern");
 
   // --------------------------------------------------
   // GLOBAL STOP
@@ -261,6 +321,20 @@ window.initDMT = function () {
       } catch (e) {}
     }
 
+    if (window.dmtIntroPart) {
+      try {
+        window.dmtIntroPart.stop();
+      } catch (e) {}
+    }
+
+    if (window.dmtIntroTimer) {
+      clearTimeout(window.dmtIntroTimer);
+      window.dmtIntroTimer = null;
+    }
+
+    const introBtn = document.getElementById("intro-sound-button");
+    if (introBtn) introBtn.disabled = false;
+
     step = 0;
 
     if (cells.length) {
@@ -271,11 +345,8 @@ window.initDMT = function () {
       }
     }
 
-    const stimBtn = document.getElementById("play_stimulus");
-    const seqBtn = document.getElementById("play_sequencer");
-
-    if (stimBtn) stimBtn.innerText = "Play stimulus";
-    if (seqBtn) seqBtn.innerText = "Play your pattern";
+    if (stimBtn) stimBtn.innerText = labelPlayStimulus;
+    if (seqBtn) seqBtn.innerText = labelPlayPattern;
 
     setButtonState("idle");
     setGridEnabled(true);
@@ -290,8 +361,7 @@ window.initDMT = function () {
     if (sequencerRunning) {
       for (let r = 0; r < rows; r++) {
         if (matrix[r][step]) {
-          const inst = ["HiHat", "Snare", "Kick"][r];
-          drum.player(inst).start(time);
+          playSample(["HiHat", "Snare", "Kick"][r], time);
         }
       }
     }
@@ -332,7 +402,7 @@ window.initDMT = function () {
       });
 
       this.part = new Tone.Part((time, row) => {
-        drum.player(row.Instrument).start(time);
+        playSample(row.Instrument, time);
       }, events);
 
       this.part.loop = true;
@@ -350,9 +420,6 @@ window.initDMT = function () {
   // BUTTONS
   // --------------------------------------------------
 
-  const stimBtn = document.getElementById("play_stimulus");
-  const seqBtn = document.getElementById("play_sequencer");
-
   if (stimBtn) {
     stimBtn.onclick = async function () {
 
@@ -367,7 +434,7 @@ window.initDMT = function () {
 
       stimulusRunning = true;
 
-      stimBtn.innerText = "Stop stimulus";
+      stimBtn.innerText = labelStopStimulus;
 
       setButtonState("stimulus");
       setGridEnabled(false);
@@ -391,12 +458,59 @@ window.initDMT = function () {
 
       sequencerRunning = true;
 
-      seqBtn.innerText = "Stop your pattern";
+      seqBtn.innerText = labelStopPattern;
 
       setButtonState("sequencer");
 
       Tone.Transport.start();
     };
+  }
+
+  // --------------------------------------------------
+  // INSTRUKTIONS-SEITEN (Ebenen): Button "Play <Instrument> sound" spielt
+  // einen Takt lang 2 Schlaege (auf Zaehlzeit 1 und 3 = Schritt 1 und 9),
+  // die Zellen leuchten im Takt auf, danach stoppt die Demo von selbst.
+  // --------------------------------------------------
+
+  if (cfg.demo) {
+
+    const demoBtn = document.getElementById("intro-sound-button");
+    const demoRow = ["HiHat", "Snare", "Kick"].indexOf(cfg.demo);
+
+    if (demoBtn) {
+      demoBtn.onclick = async function () {
+
+        await Tone.start();
+
+        window.stopDMT();
+
+        const stepSec = Tone.Time("16n").toSeconds();
+
+        if (window.dmtIntroPart) {
+          try { window.dmtIntroPart.dispose(); } catch (e) {}
+        }
+
+        window.dmtIntroPart = new Tone.Part((time, s) => {
+          playSample(cfg.demo, time);
+          Tone.Draw.schedule(() => {
+            const el = cells[demoRow] && cells[demoRow][s];
+            if (!el) return;
+            el.classList.add("flash");
+            setTimeout(() => el.classList.remove("flash"), 200);
+          }, time);
+        }, [0, 8].map(s => [s * stepSec, s]));
+
+        window.dmtIntroPart.start(0);
+
+        demoBtn.disabled = true;
+
+        Tone.Transport.start();
+
+        window.dmtIntroTimer = setTimeout(() => {
+          window.stopDMT();
+        }, Tone.Time("1m").toSeconds() * 1000 + 150);
+      };
+    }
   }
 
   // --------------------------------------------------

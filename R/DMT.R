@@ -2,10 +2,12 @@
 #'
 #' @param tempo
 #' @param num_trials
-#' @param num_examples
+#' @param num_examples Number of demo (practice) trials, 0 to 4 (default 4;
+#' 0 skips the practice phase and its instruction pages).
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
-#' @param trial_timeout
+#' @param trial_timeout Trial timeout in seconds. Applies to both the demo
+#' (training) trials and the main trials.
 #' @param language Scalar character, one of DMT_languages() (currently
 #' "en", "de", "de_f"). Fixes the standalone test to exactly this language.
 #' @param with_id Whether to ask participants for a participant ID at the
@@ -27,7 +29,7 @@
 #' @examples
 DMT_standalone <- function(tempo = 100,
                            num_trials = 5L,
-                           num_examples = 3,
+                           num_examples = 4,
                            with_feedback = TRUE,
                            stratified_sampling = TRUE,
                            custom_stratified_sampling_allocation = NULL,
@@ -88,10 +90,12 @@ DMT_standalone <- function(tempo = 100,
 #'
 #' @param num_trials
 #' @param tempo
-#' @param num_examples
+#' @param num_examples Number of demo (practice) trials, 0 to 4 (default 4;
+#' 0 skips the practice phase and its instruction pages).
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
-#' @param trial_timeout Trial timeout in seconds.
+#' @param trial_timeout Trial timeout in seconds. Applies to both the demo
+#' (training) trials and the main trials.
 #' @param language Scalar character, one of DMT_languages() (currently
 #' "en", "de", "de_f"). Fixes the test to exactly this language — no other
 #' language is reachable in the resulting timeline, not even via URL param.
@@ -106,7 +110,7 @@ DMT_standalone <- function(tempo = 100,
 #' @examples
 DMT <- function(num_trials = 5L,
                 tempo = 100,
-                num_examples = 3,
+                num_examples = 4,
                 with_feedback = TRUE,
                 stratified_sampling = TRUE,
                 custom_stratified_sampling_allocation = NULL,
@@ -117,6 +121,12 @@ DMT <- function(num_trials = 5L,
 
   if(!is.null(custom_stratified_sampling_allocation) && sum(unlist(custom_stratified_sampling_allocation)) != num_trials) {
     stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
+  }
+
+  n_demo_stimuli <- dplyr::n_distinct(demo_drum_matrix$TrialNo)
+
+  if(num_examples > n_demo_stimuli) {
+    stop(sprintf("num_examples (%i) exceeds the number of available demo stimuli (%i).", as.integer(num_examples), n_demo_stimuli))
   }
 
   # If static test:
@@ -206,9 +216,9 @@ DMT <- function(num_trials = 5L,
     psychTestR::join(
 
       # Intro
-      DMT_intro(tempo, with_id),
+      DMT_intro(tempo, with_id, with_feedback, num_examples, trial_timeout),
 
-      if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback),
+      if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback, trial_timeout),
 
       psychTestR::one_button_page(psychTestR::i18n("READY_MESSAGE"), button_text = psychTestR::i18n("CONTINUE")),
 
@@ -261,69 +271,31 @@ DMT_main_trials <- function(num_trials, tempo, with_feedback, trial_timeout = 90
   )) %>% unlist()
 }
 
-DMT_training <- function(num_examples, tempo, with_feedback) {
-  purrr::map(1:num_examples, ~ DMT_demo_loop(.x, num_examples, tempo, with_feedback = with_feedback)) %>% unlist()
+DMT_training <- function(num_examples, tempo, with_feedback, trial_timeout = 90) {
+  purrr::map(1:num_examples, ~ DMT_demo_loop(.x, num_examples, tempo, with_feedback = with_feedback, trial_timeout = trial_timeout)) %>% unlist()
 }
 
 
-DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE) {
+DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE, trial_timeout = 90) {
 
   psychTestR::join(
 
-    one_button_page_trial_no(trial_no, num_examples, demo = TRUE,
-                             text = psychTestR::i18n("DEMO_SOLUTION_PROMPT")),
-
-    psychTestR::code_block(function(state, ...) {
-
-      psychTestR::set_local("attempt", 1L, state)
-
-      stimulus <- demo_drum_matrix %>%
-        dplyr::filter(TrialNo == trial_no)
-
-      stimulus_id <- stimulus %>%
-        dplyr::pull(Stimulus) %>%
-        unique()
-
-      logging::loginfo(
-        "trial=%i rows=%i ids=%s",
-        trial_no,
-        nrow(stimulus),
-        paste(unique(stimulus$Stimulus), collapse = ",")
-      )
-
-      psychTestR::set_local("trial_no", trial_no, state)
-      psychTestR::set_local("stimulus_id", stimulus_id, state)
-      psychTestR::set_local("demo", TRUE, state)
-
-    }),
-
-    # Show stimulus as example
-    DMT_trial_page(
-      trial_no = trial_no,
-      num_trials = num_examples,
-      tempo = tempo,
-      attempt = 0L,
-      demo = TRUE,
-      stimulus_drum_matrix = demo_drum_matrix,
-      show_solution = TRUE
+    # Erklaerung der beiden Play-Buttons nur vor dem ersten Beispiel-Trial
+    if (trial_no == 1L) psychTestR::one_button_page(
+      shiny::tags$div(
+        display_trial_no(trial_no, num_examples, demo = TRUE),
+        shiny::tags$p(psychTestR::i18n("INSTR_EXAMPLE1_1")),
+        shiny::tags$p(psychTestR::i18n("INSTR_EXAMPLE1_2")),
+        shiny::tags$p(psychTestR::i18n("INSTR_EXAMPLE1_3"))
+      ),
+      button_text = psychTestR::i18n("CONTINUE")
     ),
 
-    one_button_page_trial_no(trial_no, num_examples, demo = TRUE, text = psychTestR::i18n("DEMO_ENTER_PROMPT")),
-
-    # Get user to enter it
-    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix, with_feedback = with_feedback)
+    # Struktur exakt wie im Haupttest (kein vorheriges Zeigen der Loesung);
+    # DMT_page_loop() setzt attempt/trial_no/stimulus_id/demo selbst.
+    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix, with_feedback = with_feedback, trial_timeout = trial_timeout)
 
   ) %>% unlist()
-}
-
-
-one_button_page_trial_no <- function(trial_no, num_trials, text, demo = FALSE) {
-  psychTestR::one_button_page(
-    shiny::tags$div(
-      display_trial_no(trial_no, num_trials, demo = demo),
-      shiny::tags$p(text),
-    )
-  )
 }
 
 
