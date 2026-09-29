@@ -7,3 +7,6 @@
 output
 .Renviron
 analyses
+# Kinder-Pilot: Rohdaten und Auswertungs-Output nie committen
+pilot_results
+analysis/output

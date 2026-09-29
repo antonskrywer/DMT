@@ -20,8 +20,9 @@
 #' "conifer" (the convention used across psychTestR test batteries) so the
 #' admin panel is always available without extra setup. Pass a different,
 #' non-guessable password before deploying to a public-facing server.
-#' @param researcher_email Contact email shown to participants and used in
-#' the admin panel.
+#' @param researcher_email Contact email shown to participants (in the
+#' contact line at the bottom of every page, in the test language) and used
+#' in the admin panel.
 #'
 #' @returns
 #' @export
@@ -37,7 +38,7 @@ DMT_standalone <- function(tempo = 100,
                            language = "en",
                            with_id = TRUE,
                            admin_password = "conifer",
-                           researcher_email = "sebastian.silas@uni_hamburg.de") {
+                           researcher_email = "anton.schreiber@uni-hamburg.de") {
 
   if (!is.scalar.character(admin_password)) {
     stop("admin_password must be supplied as a single character string.")
@@ -59,6 +60,9 @@ DMT_standalone <- function(tempo = 100,
         admin_password = admin_password,
         enable_admin_panel = TRUE,
         researcher_email = researcher_email,
+        # Kontaktzeile unten auf jeder Seite in der Testsprache (psychTestR
+        # zeigt sonst immer "Problems? Contact ..." auf Englisch)
+        problems_info = DMT_problems_info(researcher_email, language),
         languages = language,
         # ------------------------------------------------------------
         # BUGFIX (Admin-Panel unsichtbar): display_options(full_screen =
@@ -86,6 +90,22 @@ DMT_standalone <- function(tempo = 100,
       )
     )
 }
+# Kontaktzeile fuer psychTestR::test_options(problems_info = ...): benannter
+# Vektor mit genau der Testsprache (psychTestR verlangt Namen fuer alle
+# `languages`).
+DMT_problems_info <- function(researcher_email, language) {
+
+  text <- switch(
+    tolower(language),
+    en   = paste0("Problems? Contact ", researcher_email, " with a link to this page."),
+    de   = paste0("Probleme? Schreib an ", researcher_email, " und schick den Link zu dieser Seite mit."),
+    de_f = paste0("Probleme? Schreiben Sie an ", researcher_email, " und senden Sie den Link zu dieser Seite mit."),
+    stop("DMT_problems_info(): keine Kontaktzeile fuer Sprache '", language, "'")
+  )
+
+  stats::setNames(text, language)
+}
+
 #' Embed Drum Machine Test in battery
 #'
 #' @param num_trials
@@ -218,9 +238,16 @@ DMT <- function(num_trials = 5L,
       # Intro
       DMT_intro(tempo, with_id, with_feedback, num_examples, trial_timeout),
 
+      # Phasen-Zeitstempel (Timing-Messung Kinder-Pilot, siehe phase_timestamp())
+      phase_timestamp("intro_end"),
+
       if(num_examples > 0L) DMT_training(num_examples, tempo, with_feedback, trial_timeout),
 
+      if(num_examples > 0L) phase_timestamp("practice_end"),
+
       psychTestR::one_button_page(psychTestR::i18n("READY_MESSAGE"), button_text = psychTestR::i18n("CONTINUE")),
+
+      phase_timestamp("main_start"),
 
       # BUGFIX (leerer output/results/-Ordner, siehe Uebergabe-Chat):
       # psychTestR speichert output/sessions/<p_id>/data.RDS automatisch bei
@@ -243,6 +270,8 @@ DMT <- function(num_trials = 5L,
 
       # Main Trials
       DMT_main_trials(main_trial_count, tempo, with_feedback, trial_timeout, stratified_sampling, full_drum_matrix),
+
+      phase_timestamp("main_end"),
 
       # Finaler Save: kompletter Durchlauf, komplett=TRUE.
       psychTestR::elt_save_results_to_disk(complete = TRUE),
@@ -269,6 +298,20 @@ DMT_main_trials <- function(num_trials, tempo, with_feedback, trial_timeout = 90
     # zum ersten elt_save_results_to_disk()-Aufruf oben in DMT()).
     psychTestR::elt_save_results_to_disk(complete = FALSE)
   )) %>% unlist()
+}
+
+# ----------------------------------------------------------------------
+# Phasen-Zeitstempel fuer die Timing-Messung (Kinder-Pilot 2026-09-29):
+# speichert Sys.time() als eigenes Ergebnis "DMT_phase_<phase>" (intro_end,
+# practice_end, main_start, main_end). Zusammen mit session$time_started
+# ergibt das die Dauer von Intro, Uebung und Haupttest (siehe
+# DMT_phase_durations() in results.R). Fuer Teilnehmende unsichtbar;
+# DMT_results_to_long() ignoriert diese Labels (anderes Muster).
+# ----------------------------------------------------------------------
+phase_timestamp <- function(phase) {
+  psychTestR::code_block(function(state, ...) {
+    psychTestR::save_result(state, paste0("DMT_phase_", phase), Sys.time())
+  })
 }
 
 DMT_training <- function(num_examples, tempo, with_feedback, trial_timeout = 90) {

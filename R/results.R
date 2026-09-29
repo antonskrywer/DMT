@@ -171,7 +171,10 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
   if (nrow(rows) == 0) return(rows)
 
   if (!include_demo) {
-    rows <- dplyr::filter(rows, !isTRUE(demo))
+    # BUGFIX: vorher !isTRUE(demo) - isTRUE() auf die ganze Spalte ist bei
+    # mehr als einer Zeile immer FALSE, der Filter hat also nie etwas
+    # entfernt. Jetzt zeilenweise (NA bleibt drin wie "kein Demo").
+    rows <- dplyr::filter(rows, !(demo %in% TRUE))
   }
 
   rows %>%
@@ -186,6 +189,65 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
       timed_out, rt_ms, stim_plays, pattern_plays, feedback_rt_ms, timestamp
     ) %>%
     dplyr::arrange(cumulative_attempt, trial_no, attempt)
+}
+
+# ------------------------------------------------------------------
+# Phasendauern (Timing-Messung Kinder-Pilot)
+# ------------------------------------------------------------------
+
+#' Phase durations of one or more DMT sessions
+#'
+#' Liest die Phasen-Zeitstempel (`DMT_phase_intro_end`,
+#' `DMT_phase_practice_end`, `DMT_phase_main_start`, `DMT_phase_main_end`,
+#' gesetzt von `phase_timestamp()` in DMT.R) plus `session$time_started`
+#' und berechnet daraus die Dauer der Phasen in Minuten. Fehlende
+#' Zeitstempel (aeltere Daten, Abbruch, num_examples = 0) ergeben NA.
+#'
+#' @param x Entweder ein Pfad zu einem Ergebnis-Ordner (alle `.rds` darin
+#'   werden gelesen) oder ein einzelnes Ergebnis-Objekt (wie von `readRDS()`).
+#'
+#' @returns Ein Tibble, eine Zeile pro Session: `p_id`, `complete`,
+#'   `intro_min` (Start bis Ende Intro inkl. ID-Seite), `practice_min`
+#'   (Uebungs-Trials), `ready_min` ("Jetzt bist du bereit"-Seite),
+#'   `main_min` (Haupttest), `total_min` (Start bis Ende Haupttest).
+#' @export
+DMT_phase_durations <- function(x) {
+
+  if (is.character(x)) {
+    files <- list.files(x, pattern = "[.]rds$", full.names = TRUE)
+    return(purrr::map_dfr(files, function(f) {
+      res <- readRDS(f)
+      out <- DMT_phase_durations(res)
+      if (is.na(out$p_id)) out$p_id <- tools::file_path_sans_ext(basename(f))
+      out
+    }))
+  }
+
+  results_list <- if (!is.null(x[["results"]])) x[["results"]] else x
+  session      <- x[["session"]]
+
+  get_time <- function(label) {
+    v <- results_list[[label]]
+    if (is.null(v)) as.POSIXct(NA) else as.POSIXct(v)
+  }
+
+  t_start        <- session[["time_started"]] %||% as.POSIXct(NA)
+  t_intro_end    <- get_time("DMT_phase_intro_end")
+  t_practice_end <- get_time("DMT_phase_practice_end")
+  t_main_start   <- get_time("DMT_phase_main_start")
+  t_main_end     <- get_time("DMT_phase_main_end")
+
+  mins <- function(a, b) as.numeric(difftime(b, a, units = "mins"))
+
+  tibble::tibble(
+    p_id         = session[["p_id"]] %||% NA_character_,
+    complete     = session[["complete"]] %||% NA,
+    intro_min    = mins(t_start, t_intro_end),
+    practice_min = mins(t_intro_end, t_practice_end),
+    ready_min    = mins(t_practice_end, t_main_start),
+    main_min     = mins(t_main_start, t_main_end),
+    total_min    = mins(t_start, t_main_end)
+  )
 }
 
 # ------------------------------------------------------------------
