@@ -184,7 +184,18 @@ DMT_trial_page <- function(trial_no,
 
   stimulus_json <- jsonlite::toJSON(stimulus, dataframe = "rows")
 
+  should_collect <- collect_answer && !show_solution
+
+  # Feedback-Seite = von DMT_feedback() erzeugt (collect_answer = FALSE,
+  # feedback gesetzt), inkl. der Loesungsseite nach dem letzten Attempt.
+  is_feedback_page <- !collect_answer && !is.null(feedback)
+
+  metrics <- page_metrics_js(
+    if (should_collect) "attempt" else if (is_feedback_page) "feedback" else NULL
+  )
+
   ui <- shiny::tags$div(
+    metrics$start,
     dmt_ui(
       trial_no,
       stimulus_id,
@@ -202,24 +213,109 @@ DMT_trial_page <- function(trial_no,
     psychTestR::trigger_button(
       "next",
       psychTestR::i18n(if (collect_answer) "BUTTON_CHECK" else "BUTTON_NEXT"),
-      onclick = if(show_solution)
-        "if(window.stopDMT){ window.stopDMT();resetSequencer();}"
-      else
-        "if(window.stopDMT){ window.stopDMT(); }"
+      onclick = paste0(
+        metrics$send,
+        if(show_solution)
+          "if(window.stopDMT){ window.stopDMT();resetSequencer();}"
+        else
+          "if(window.stopDMT){ window.stopDMT(); }"
+      )
     )
   )
 
   label_prefix <- if (demo) "DMT_demo_trial_" else "DMT_trial_"
 
-  should_collect <- collect_answer && !show_solution
+  label <- paste0(label_prefix, trial_no, "_attempt_", attempt)
+
+  if (is_feedback_page) {
+
+    # Eigenes Ergebnis "<attempt-label>_feedback" (Verweildauer auf der
+    # Feedback-Seite NACH diesem Attempt). DMT_results_to_long() ordnet
+    # es der Zeile des Attempts zu. Ueberschreibt answer(state) - das ist
+    # unkritisch, weil nur DMT_feedback() `answer` liest, und zwar direkt
+    # nach der Attempt-Seite (die answer(state) neu setzt).
+    return(psychTestR::page(
+      ui,
+      label = paste0(label, "_feedback"),
+      get_answer = function(input, ...) {
+        list(
+          trial_no       = trial_no,
+          attempt        = attempt,
+          demo           = demo,
+          feedback_rt_ms = input$feedback_rt_ms %||% NA_real_
+        )
+      },
+      save_answer = TRUE
+    ))
+  }
 
   psychTestR::page(
     ui,
-    label = paste0(label_prefix, trial_no, "_attempt_", attempt),
+    label = label,
     get_answer = if(should_collect) dmt_get_answer(stimulus_drum_matrix, stratified_sampling) else NULL,
     save_answer = should_collect
   )
 
+}
+
+# ----------------------------------------------------------------------
+# Verhaltensmasse pro Seite (Timing-/Kinder-Pilot):
+#   type = "attempt":  attempt_rt_ms (Seite anzeigen -> Klick auf Check,
+#                      auch der automatische Klick beim Timeout),
+#                      attempt_stim_plays / attempt_pattern_plays (wie oft
+#                      "Stimulus abspielen" bzw. "Eigenes Pattern abspielen"
+#                      GESTARTET wurde; Stopp-Klicks zaehlen nicht).
+#   type = "feedback": feedback_rt_ms (Verweildauer auf der Feedback-Seite).
+#   type = NULL:       nichts.
+#
+# $start = <script>, das beim Rendern Startzeit + Zaehler setzt und die
+# Shiny-Inputs leert (sie bleiben sonst seitenuebergreifend erhalten).
+# $send  = JS fuer das onclick des Next-Buttons. Reihenfolge: psychTestR
+# setzt "trigger_button(this.id);" VOR diesen Code, ruft next_page() aber
+# erst per setTimeout auf -> die setInputValue-Aufrufe sind sicher vor dem
+# Seitenwechsel eingereiht. Die Zaehler werden in inst/js/dmt.js erhoeht.
+# ----------------------------------------------------------------------
+page_metrics_js <- function(type = NULL) {
+
+  if (is.null(type)) return(list(start = NULL, send = ""))
+
+  inputs <- switch(
+    type,
+    attempt  = c(rt = "attempt_rt_ms",
+                 stim = "attempt_stim_plays",
+                 pattern = "attempt_pattern_plays"),
+    feedback = c(rt = "feedback_rt_ms"),
+    stop("page_metrics_js(): unbekannter type '", type, "'")
+  )
+
+  reset_js <- paste0(
+    "Shiny.setInputValue('", inputs, "', null, {priority: 'event'});",
+    collapse = " "
+  )
+
+  send_js <- paste0(
+    "Shiny.setInputValue('", inputs["rt"], "', ",
+    "Math.round(performance.now() - window.dmtPageStart), {priority: 'event'});",
+    if (type == "attempt") paste0(
+      " Shiny.setInputValue('", inputs["stim"], "', window.dmtStimPlays || 0, {priority: 'event'});",
+      " Shiny.setInputValue('", inputs["pattern"], "', window.dmtPatternPlays || 0, {priority: 'event'});"
+    )
+  )
+
+  list(
+    start = shiny::tags$script(shiny::HTML(sprintf("
+      window.dmtPageStart = performance.now();
+      window.dmtStimPlays = 0;
+      window.dmtPatternPlays = 0;
+      if (window.Shiny) { %s }
+    ", reset_js))),
+    send = sprintf("
+      if (window.dmtPageStart !== undefined && window.Shiny) {
+        %s
+        window.dmtPageStart = undefined;
+      }
+    ", send_js)
+  )
 }
 
 # ----------------------------------------------------------------------
@@ -410,7 +506,10 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     cumulative_attempt <- (psychTestR::get_global("cumulative_attempt", state) %||% 0L) + 1L
     psychTestR::set_global("cumulative_attempt", cumulative_attempt, state)
 
-    rt_ms <- input$attempt_rt_ms %||% NA_real_
+    # Gesendet von page_metrics_js("attempt") beim Klick auf Check
+    rt_ms         <- input$attempt_rt_ms %||% NA_real_
+    stim_plays    <- input$attempt_stim_plays %||% NA_integer_
+    pattern_plays <- input$attempt_pattern_plays %||% NA_integer_
 
     list(
       res_summary          = res_summary,
@@ -427,6 +526,8 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
       source               = source_label,
       complexity_half      = complexity_half,
       rt_ms                = rt_ms,
+      stim_plays           = as.integer(stim_plays),
+      pattern_plays        = as.integer(pattern_plays),
       timestamp            = Sys.time()
     )
   }

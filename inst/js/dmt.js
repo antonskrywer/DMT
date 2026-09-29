@@ -432,6 +432,9 @@ window.initDMT = function () {
 
       window.stopDMT();
 
+      // Zaehler fuer attempt_stim_plays (siehe page_metrics_js() in trial_logic.R)
+      window.dmtStimPlays = (window.dmtStimPlays || 0) + 1;
+
       stimulusRunning = true;
 
       stimBtn.innerText = labelStopStimulus;
@@ -455,6 +458,9 @@ window.initDMT = function () {
       }
 
       window.stopDMT();
+
+      // Zaehler fuer attempt_pattern_plays (siehe page_metrics_js() in trial_logic.R)
+      window.dmtPatternPlays = (window.dmtPatternPlays || 0) + 1;
 
       sequencerRunning = true;
 

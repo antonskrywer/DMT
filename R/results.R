@@ -9,7 +9,9 @@
 # Voraussetzung: dmt_get_answer() (trial_logic.R) muss die erweiterte
 # Version verwenden, die trial_no, stimulus_id, demo, attempt,
 # feedback_layer_shown, cumulative_attempt, complexity, source,
-# complexity_half, rt_ms, timestamp mit ins Answer-Objekt schreibt, UND
+# complexity_half, rt_ms, stim_plays, pattern_plays, timestamp mit ins
+# Answer-Objekt schreibt (feedback_rt_ms kommt aus dem separaten
+# Ergebnis "<attempt-label>_feedback" der Feedback-Seite), UND
 # DMT_trial_page()/DMT_feedback() muessen den Label-/collect_answer-Fix
 # enthalten (siehe trial_logic.R, feedback.R) - sonst gibt es doppelte
 # oder kollidierende Trial-Labels in aelteren Ergebnisdateien.
@@ -136,6 +138,12 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
 
     inst_wide <- dmt_res_summary_wide(answer$res_summary)
 
+    # Verweildauer auf der Feedback-Seite NACH diesem Attempt: eigenes
+    # Ergebnis "<label>_feedback" (siehe DMT_trial_page()). Fehlt bei
+    # aelteren Daten -> NA.
+    feedback_res <- results_list[[paste0(label, "_feedback")]]
+    feedback_rt_ms <- if (is.list(feedback_res)) feedback_res$feedback_rt_ms %||% NA_real_ else NA_real_
+
     tibble::tibble(
       p_id                 = p_id,
       trial_no             = trial_no,
@@ -152,8 +160,11 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
       dplyr::bind_cols(inst_wide) %>%
       dplyr::mutate(
         timed_out = answer$timed_out %||% NA,
-        rt_ms     = answer$rt_ms %||% NA_real_,
-        timestamp = answer$timestamp %||% as.POSIXct(NA)
+        rt_ms          = as.numeric(answer$rt_ms %||% NA_real_),
+        stim_plays     = as.integer(answer$stim_plays %||% NA_integer_),
+        pattern_plays  = as.integer(answer$pattern_plays %||% NA_integer_),
+        feedback_rt_ms = as.numeric(feedback_rt_ms),
+        timestamp      = answer$timestamp %||% as.POSIXct(NA)
       )
   })
 
@@ -172,7 +183,7 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
       snare_hits, snare_n, snare_mistakes,
       kick_hits, kick_n, kick_mistakes,
       n_total_mistakes,
-      timed_out, rt_ms, timestamp
+      timed_out, rt_ms, stim_plays, pattern_plays, feedback_rt_ms, timestamp
     ) %>%
     dplyr::arrange(cumulative_attempt, trial_no, attempt)
 }
