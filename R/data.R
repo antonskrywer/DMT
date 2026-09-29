@@ -37,8 +37,10 @@ NULL
 #'
 #' The item bank of drum patterns used for the practice trials
 #' (\code{DMT_training()} / \code{DMT_demo_loop()}) shown before the
-#' main test, including the four hardcoded pedagogical instruction
-#' stimuli (kick, snare, hi-hat, kick+snare).
+#' main test (TrialNo = order of use): Easy_1 (kick on 1 and 3),
+#' Practice_2 (kick on 1, snare on 2 and 4, hi-hat on 3; see
+#' data-raw/practice_stimuli.R), then the pedagogical stimuli Easy_2
+#' (snare), Easy_3 (hi-hat) and Easy_4 (kick+snare).
 #' @name demo_drum_matrix
 #' @docType data
 NULL

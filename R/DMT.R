@@ -2,7 +2,7 @@
 #'
 #' @param tempo
 #' @param num_trials
-#' @param num_examples Number of demo (practice) trials, 0 to 4 (default 4;
+#' @param num_examples Number of demo (practice) trials, 0 to 5 (default 2;
 #' 0 skips the practice phase and its instruction pages).
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
@@ -29,7 +29,7 @@
 #' @examples
 DMT_standalone <- function(tempo = 100,
                            num_trials = 5L,
-                           num_examples = 4,
+                           num_examples = 2,
                            with_feedback = TRUE,
                            stratified_sampling = TRUE,
                            custom_stratified_sampling_allocation = NULL,
@@ -90,7 +90,7 @@ DMT_standalone <- function(tempo = 100,
 #'
 #' @param num_trials
 #' @param tempo
-#' @param num_examples Number of demo (practice) trials, 0 to 4 (default 4;
+#' @param num_examples Number of demo (practice) trials, 0 to 5 (default 2;
 #' 0 skips the practice phase and its instruction pages).
 #' @param with_feedback
 #' @param custom_stratified_sampling_allocation
@@ -110,7 +110,7 @@ DMT_standalone <- function(tempo = 100,
 #' @examples
 DMT <- function(num_trials = 5L,
                 tempo = 100,
-                num_examples = 4,
+                num_examples = 2,
                 with_feedback = TRUE,
                 stratified_sampling = TRUE,
                 custom_stratified_sampling_allocation = NULL,

@@ -26,6 +26,12 @@ ol {
   counter-reset: item;
 }
 
+/* Eigener Zaehler ignoriert das start-Attribut -> Ebenen-Seiten
+   (INSTR_LAYER_2/3_TITLE, <ol start="2">/<ol start="3">) zeigten sonst
+   immer "1." */
+ol[start="2"] { counter-reset: item 1; }
+ol[start="3"] { counter-reset: item 2; }
+
 ol li {
   display: flex;
   gap: 0.4em;
