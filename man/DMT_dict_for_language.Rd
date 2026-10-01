@@ -7,15 +7,12 @@
 DMT_dict_for_language(dict, language)
 }
 \arguments{
-\item{dict}{An i18n_dict object (e.g. DMT_dict).}
+\item{dict}{A \code{psychTestR::i18n_dict} object (e.g. \code{DMT_dict}).}
 
-\item{language}{Scalar character, one of DMT_languages().}
+\item{language}{A language code, one of \code{\link{DMT_languages}()}.}
 }
 \description{
-Internal helper: subsets an i18n_dict down to just the `key` column
-plus one language column, so that new_timeline() builds the test for
-exactly that one language. The resulting timeline supports no other
-language, not even via the `?language=` URL parameter that psychTestR
-would otherwise offer.
+Subsets an i18n dictionary to the \code{key} column plus one language
+column, so that the timeline is built for exactly that language.
 }
 \keyword{internal}

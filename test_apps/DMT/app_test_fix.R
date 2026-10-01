@@ -1,5 +1,4 @@
-# Lokaler Kurztest (Browser-Pane / .claude/launch.json, Port 8399).
-# Kurz gehalten: Uebungs-Trials per Default (2), 2 Haupt-Trials, keine ID-Abfrage, Deutsch.
+# Short local test run (2 main trials, German, no ID page)
 
 devtools::load_all(".")
 

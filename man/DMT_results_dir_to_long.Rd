@@ -2,22 +2,22 @@
 % Please edit documentation in R/results.R
 \name{DMT_results_dir_to_long}
 \alias{DMT_results_dir_to_long}
-\title{Convert all DMT result RDS files in a directory into one long tibble}
+\title{Convert all DMT result files in a directory into long format}
 \usage{
 DMT_results_dir_to_long(dir, pattern = "\\\\.rds$", include_demo = TRUE)
 }
 \arguments{
-\item{dir}{Pfad zum Ergebnis-Ordner (z.B. "output/results").}
+\item{dir}{Path to the results directory (e.g. \code{"output/results"}).}
 
-\item{pattern}{Dateimuster fuer `list.files()`. Default: alle .rds.}
+\item{pattern}{File name pattern passed to \code{list.files()}.}
 
-\item{include_demo}{s. \code{\link{DMT_results_to_long}}.}
+\item{include_demo}{Whether to include practice trials (column
+\code{demo}).}
 }
 \value{
-Ein Tibble ueber alle Teilnehmer.
+A tibble with one row per attempt across all participants.
 }
 \description{
-Liest alle `.rds`-Ergebnisdateien in `dir` ein und wendet
-\code{\link{DMT_results_to_long}} auf jede an, um einen Datensatz ueber
-alle Teilnehmer hinweg zu bauen.
+Applies \code{\link{DMT_results_to_long}()} to every results file in
+\code{dir} and combines the output.
 }

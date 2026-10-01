@@ -6,7 +6,10 @@
 \usage{
 DMT_languages()
 }
+\value{
+A character vector of language codes.
+}
 \description{
-Lists the languages available for DMT implementations. Muss mit den
-Spaltennamen (in Kleinschreibung) in data_raw/DMT_dict.xlsx übereinstimmen.
+Lists the languages available for the DMT. Each language corresponds to a
+column in \code{data-raw/DMT_dict.xlsx}.
 }

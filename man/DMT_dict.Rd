@@ -9,5 +9,5 @@ The default internationalisation dictionary used by the DMT.
 Contains translations for keys used throughout the DMT package
 (intro, trial UI, feedback) in three languages: English ("en"),
 informal German ("de"), and formal German ("de_f").
-Built from \code{data_raw/DMT_dict.xlsx} via \code{data_raw/DMT_dict.R}.
+Built from \code{data-raw/DMT_dict.xlsx} via \code{data-raw/DMT_dict.R}.
 }

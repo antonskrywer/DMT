@@ -1,13 +1,3 @@
-# trial_logic.R
-#
-# Vektorisiert: alle Teilnehmer-sichtbaren Strings laufen über
-# psychTestR::i18n() und Keys aus DMT_dict.
-#
-# WICHTIG: `label` in DMT_trial_page() (Format "DMT_trial_<n>_attempt_<a>")
-# und `trial_name` in while_logic() sind interne Ergebnis-Keys, KEINE
-# UI-Texte — diese dürfen nie über i18n() laufen, sonst bricht die
-# Attempt-Loop-Logik (results[[trial_name]] Lookup).
-
 DMT_page_loop <- function(trial_no,
                           num_trials,
                           tempo,
@@ -186,8 +176,7 @@ DMT_trial_page <- function(trial_no,
 
   should_collect <- collect_answer && !show_solution
 
-  # Feedback-Seite = von DMT_feedback() erzeugt (collect_answer = FALSE,
-  # feedback gesetzt), inkl. der Loesungsseite nach dem letzten Attempt.
+  # Page created by DMT_feedback(), including the solution page
   is_feedback_page <- !collect_answer && !is.null(feedback)
 
   metrics <- page_metrics_js(
@@ -229,11 +218,8 @@ DMT_trial_page <- function(trial_no,
 
   if (is_feedback_page) {
 
-    # Eigenes Ergebnis "<attempt-label>_feedback" (Verweildauer auf der
-    # Feedback-Seite NACH diesem Attempt). DMT_results_to_long() ordnet
-    # es der Zeile des Attempts zu. Ueberschreibt answer(state) - das ist
-    # unkritisch, weil nur DMT_feedback() `answer` liest, und zwar direkt
-    # nach der Attempt-Seite (die answer(state) neu setzt).
+    # Saves the time spent on the feedback page as result
+    # "<attempt label>_feedback"
     return(psychTestR::page(
       ui,
       label = paste0(label, "_feedback"),
@@ -258,23 +244,12 @@ DMT_trial_page <- function(trial_no,
 
 }
 
-# ----------------------------------------------------------------------
-# Verhaltensmasse pro Seite (Timing-/Kinder-Pilot):
-#   type = "attempt":  attempt_rt_ms (Seite anzeigen -> Klick auf Check,
-#                      auch der automatische Klick beim Timeout),
-#                      attempt_stim_plays / attempt_pattern_plays (wie oft
-#                      "Stimulus abspielen" bzw. "Eigenes Pattern abspielen"
-#                      GESTARTET wurde; Stopp-Klicks zaehlen nicht).
-#   type = "feedback": feedback_rt_ms (Verweildauer auf der Feedback-Seite).
-#   type = NULL:       nichts.
-#
-# $start = <script>, das beim Rendern Startzeit + Zaehler setzt und die
-# Shiny-Inputs leert (sie bleiben sonst seitenuebergreifend erhalten).
-# $send  = JS fuer das onclick des Next-Buttons. Reihenfolge: psychTestR
-# setzt "trigger_button(this.id);" VOR diesen Code, ruft next_page() aber
-# erst per setTimeout auf -> die setInputValue-Aufrufe sind sicher vor dem
-# Seitenwechsel eingereiht. Die Zaehler werden in inst/js/dmt.js erhoeht.
-# ----------------------------------------------------------------------
+# JS for recording per-page measures:
+#   type = "attempt":  attempt_rt_ms, attempt_stim_plays, attempt_pattern_plays
+#   type = "feedback": feedback_rt_ms
+# `start` resets the timer, the play counters (incremented in dmt.js) and the
+# Shiny inputs when the page is rendered; `send` is added to the onclick
+# handler of the next button.
 page_metrics_js <- function(type = NULL) {
 
   if (is.null(type)) return(list(start = NULL, send = ""))
@@ -285,7 +260,7 @@ page_metrics_js <- function(type = NULL) {
                  stim = "attempt_stim_plays",
                  pattern = "attempt_pattern_plays"),
     feedback = c(rt = "feedback_rt_ms"),
-    stop("page_metrics_js(): unbekannter type '", type, "'")
+    stop("page_metrics_js(): unknown type '", type, "'")
   )
 
   reset_js <- paste0(
@@ -318,22 +293,10 @@ page_metrics_js <- function(type = NULL) {
   )
 }
 
-# ----------------------------------------------------------------------
-# BUGFIX (Kollegen-Feedback Bug 1): Eine Note, die der Teilnehmer nur um
-# eine Position verschoben eintraegt (z.B. Position 12 statt der
-# korrekten Position 13), wurde bisher als 2 GETRENNTE Fehler gezaehlt
-# (1x die korrekte Position 13 fehlt, 1x Position 12 wurde faelschlich
-# gesetzt) - fuer den Teilnehmer sieht das nach nur 1 Fehler aus.
-#
-# Fix (Nutzer-Entscheidung): Pro Instrument werden fehlende Pflicht-
-# Positionen mit falsch gesetzten Positionen gepaart, wenn sie hoechstens
-# 1 Sechzehntel auseinanderliegen (naechstliegendes Paar zuerst, danach
-# das naechste usw.). Jedes so gefundene Paar zaehlt als 1 Fehler statt 2.
-# Positionen, die keinen Partner in dieser Naehe finden, zaehlen weiterhin
-# einzeln. Aendert NICHT die einzelnen Mistake-Zellen in `compare`
-# (weiterhin pro Zelle korrekt, relevant fuer andere Auswertungen) -
-# betrifft nur die aggregierte NoMistakes-Zahl pro Instrument.
-# ----------------------------------------------------------------------
+# Counts the mistakes for one instrument. A missed onset and a wrongly set
+# onset at most max_pair_distance sixteenths apart (i.e. a note entered
+# slightly off) count as one mistake rather than two. Closest pairs are
+# matched first.
 count_paired_mistakes <- function(missed_positions, extra_positions, max_pair_distance = 1) {
 
   if (length(missed_positions) == 0 || length(extra_positions) == 0) {
@@ -389,38 +352,22 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     logging::loginfo("trial_no: %i | stimulus_id: %s | demo: %s", trial_no, stimulus_id, is_demo)
 
-    if (is_demo) {
-      correct_answer <- demo_drum_matrix %>%
-        dplyr::filter(Stimulus == !!stimulus_id) %>%
-        dplyr::select(Instrument, BeatPositionSixteenth)
+    stimulus <- (if (is_demo) demo_drum_matrix else drum_matrix) %>%
+      dplyr::filter(Stimulus == !!stimulus_id)
 
-    } else {
-      correct_answer <- drum_matrix %>%
-        dplyr::filter(Stimulus == !!stimulus_id) %>%
-        dplyr::select(Instrument, BeatPositionSixteenth)
+    correct_answer <- stimulus %>%
+      dplyr::select(Instrument, BeatPositionSixteenth)
 
-    }
+    stimulus_meta <- dplyr::slice(stimulus, 1)
+
+    complexity <- stimulus_meta$Complexity %||% NA_real_
 
     if (is_demo) {
-
-      stimulus_meta <- demo_drum_matrix %>%
-        dplyr::filter(Stimulus == !!stimulus_id) %>%
-        dplyr::slice(1)
-
-      complexity      <- stimulus_meta$Complexity %||% NA_real_
       source_label    <- NA_character_
       complexity_half <- NA_character_
-
     } else {
-
-      stimulus_meta <- drum_matrix %>%
-        dplyr::filter(Stimulus == !!stimulus_id) %>%
-        dplyr::slice(1)
-
-      complexity      <- stimulus_meta$Complexity %||% NA_real_
       source_label    <- stimulus_meta$Source %||% NA_character_
       complexity_half <- stimulus_meta$ComplexityHalves %||% NA_character_
-
     }
 
     if (length(input$sequencer_state) == 0) {
@@ -453,30 +400,8 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     }
 
-    # ----------------------------------------------------------------
-    # BUGFIX Punkt 3b: dplyr::group_by(Instrument, .drop = FALSE) war
-    # bisher wirkungslos, weil Instrument zu diesem Zeitpunkt ein
-    # Character-Vektor war (.drop = FALSE wirkt nur bei Faktoren). Dass
-    # trotzdem immer alle 3 Instrumente im Ergebnis auftauchten, lag
-    # allein an complete_instruments() danach.
-    #
-    # Fix: Instrument wird VOR group_by() explizit zu
-    # factor(levels = inst_levels) gemacht. Damit garantiert
-    # .drop = FALSE jetzt wirklich, dass alle 3 Instrument-Gruppen im
-    # summarise()-Output erscheinen - auch wenn eine davon 0 Zeilen in
-    # compare hat (z.B. bei komplett leerer Nutzereingabe, siehe
-    # Punkt 3d, oder falls ein Instrument keine erforderlichen Onsets
-    # hat).
-    #
-    # Nebenwirkung: mean() einer leeren Gruppe ergibt NaN statt eines
-    # Werts -> wird explizit auf 1 gesetzt (= derselbe Wert, den vorher
-    # complete_instruments() fuer fehlende Instrumente eingesetzt hat).
-    # Nach aussen also KEINE Verhaltensaenderung.
-    #
-    # complete_instruments() bleibt als zusaetzliches Sicherheitsnetz
-    # bestehen (tut jetzt i.d.R. nichts mehr, da res_summary durch
-    # .drop = FALSE bereits vollstaendig ist).
-    # ----------------------------------------------------------------
+    # Instrument must be a factor for .drop = FALSE to keep instruments
+    # without rows; their ProportionCorrect (NaN) is set to 1.
     inst_levels <- c("HiHat", "Snare", "Kick")
 
     res_summary <- compare %>%
@@ -506,7 +431,7 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     cumulative_attempt <- (psychTestR::get_global("cumulative_attempt", state) %||% 0L) + 1L
     psychTestR::set_global("cumulative_attempt", cumulative_attempt, state)
 
-    # Gesendet von page_metrics_js("attempt") beim Klick auf Check
+    # Sent by page_metrics_js("attempt")
     rt_ms         <- input$attempt_rt_ms %||% NA_real_
     stim_plays    <- input$attempt_stim_plays %||% NA_integer_
     pattern_plays <- input$attempt_pattern_plays %||% NA_integer_
@@ -532,6 +457,7 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
     )
   }
 }
+
 dmt_ui <- function(trial_no,
                    stimulus_id,
                    num_trials,
@@ -720,8 +646,7 @@ timeout_js <- function(show_solution, trial_timeout) {
     shiny::tags$script(sprintf("
       clearTimeout(window.dmtTrialTimeout);
 
-      // Shiny-Input behaelt seinen Wert seitenuebergreifend -> pro Seite
-      // zuruecksetzen, sonst wuerde ein frueherer Timeout weiterwirken.
+      // Shiny inputs persist across pages, so reset the flag on every page
       window.dmtTimedOut = false;
       if (window.Shiny) Shiny.setInputValue('dmtTimedOut', false, {priority: 'event'});
 

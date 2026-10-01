@@ -1,40 +1,6 @@
-# R/results.R
-#
-# Post-hoc Export: wandelt psychTestR-Ergebnisse des DMT in ein
-# Long-Format-Tibble um (eine Zeile pro Trial x Attempt), das direkt als
-# Input fuer die ISLP-Schaetzung (Yu & Douglas, 2023) dient - kompatibel
-# mit dem MCMC-Code in data_simulation.R (run_mcmc_islp_all_dims() etc.),
-# wenn man dessen sim_object$data durch dieses Tibble ersetzt.
-#
-# Voraussetzung: dmt_get_answer() (trial_logic.R) muss die erweiterte
-# Version verwenden, die trial_no, stimulus_id, demo, attempt,
-# feedback_layer_shown, cumulative_attempt, complexity, source,
-# complexity_half, rt_ms, stim_plays, pattern_plays, timestamp mit ins
-# Answer-Objekt schreibt (feedback_rt_ms kommt aus dem separaten
-# Ergebnis "<attempt-label>_feedback" der Feedback-Seite), UND
-# DMT_trial_page()/DMT_feedback() muessen den Label-/collect_answer-Fix
-# enthalten (siehe trial_logic.R, feedback.R) - sonst gibt es doppelte
-# oder kollidierende Trial-Labels in aelteren Ergebnisdateien.
-
-# ------------------------------------------------------------------
-# Interner Helper: res_summary (3 Zeilen: HiHat/Snare/Kick) -> breites
-# 1-Zeilen-Tibble mit hihat_hits/hihat_n/hihat_mistakes,
-# snare_hits/snare_n/snare_mistakes, kick_hits/kick_n/kick_mistakes,
-# n_total_mistakes.
-#
-# BUGFIX (MCMC-Adapter-Kompatibilitaet): <inst>_n ist IMMER NoPositions =
-# 16 (Gesamtgroesse des Grids), NICHT die Anzahl der fuer dieses
-# Instrument tatsaechlich erforderlichen Onsets - <inst>_hits kann daher
-# in echten Daten so gut wie nie <inst>_n erreichen. Der MCMC-Adapter
-# (mcmc_adapter_dmt.R::dmt_binarize_dim()) verglich bisher genau das
-# (hits == n) und haette ein Instrument damit fast immer als "falsch"
-# gewertet, auch bei 0 tatsaechlichen Fehlern. Deshalb jetzt explizite
-# <inst>_mistakes-Spalten (aus res_summary$NoMistakes) ergaenzt, damit der
-# Adapter analog zur global_correct-Logik (NoMistakes == 0) binarisieren
-# kann, statt sich auf den nicht dafuer geeigneten hits/n-Vergleich zu
-# verlassen.
-# ------------------------------------------------------------------
-
+# Converts res_summary (one row per instrument) into a single wide row.
+# Note that <inst>_n is the grid length (16), not the number of required
+# onsets; use <inst>_mistakes == 0 to score an instrument as correct.
 dmt_res_summary_wide <- function(res_summary) {
 
   get_val <- function(inst, col) {
@@ -57,40 +23,26 @@ dmt_res_summary_wide <- function(res_summary) {
   )
 }
 
-# ------------------------------------------------------------------
-# Ein Teilnehmer -> Long-Format
-# ------------------------------------------------------------------
-
 #' Convert one participant's DMT results into long format
 #'
-#' Nimmt das komplette Ergebnis-Objekt EINES Teilnehmers entgegen, wie es
-#' `readRDS("output/results/<datei>.rds")` liefert (Liste mit `$results`
-#' und `$session`), und baut daraus ein Long-Format-Tibble mit einer Zeile
-#' pro (Trial x Attempt).
+#' Builds a tibble with one row per trial attempt from the results of one
+#' participant. Only results labelled \code{DMT_trial_<n>_attempt_<a>} or
+#' \code{DMT_demo_trial_<n>_attempt_<a>} are used.
 #'
-#' Nur Seiten, deren Label dem Muster "DMT_trial_<n>_attempt_<a>" oder
-#' "DMT_demo_trial_<n>_attempt_<a>" folgt, werden beruecksichtigt (siehe
-#' trial_logic.R::DMT_trial_page(), Kommentar zu internen Ergebnis-Keys).
-#' Alle anderen Ergebnis-Eintraege (z.B. aus get_p_id()) werden ignoriert.
+#' @param res The results of one participant, either as read from
+#'   \code{output/results/*.rds} (a list with \code{$results} and
+#'   \code{$session}) or the results list itself.
+#' @param p_id Participant ID. If \code{NULL}, it is taken from
+#'   \code{res$session$p_id} if available.
+#' @param include_demo Whether to include practice trials (column
+#'   \code{demo}).
 #'
-#' @param res Das komplette Ergebnis-Objekt eines Teilnehmers (Liste mit
-#'   `$results` und optional `$session`), ODER direkt die Ergebnisliste
-#'   selbst (z.B. `psychTestR::results(state)$result`) - beides wird
-#'   erkannt.
-#' @param p_id Optionale Teilnehmer-ID als Spalte. Falls NULL, wird
-#'   versucht, sie aus `res$session$p_id` zu lesen; sonst NA.
-#' @param include_demo Sollen Demo-/Instruktions-Trials mit ausgegeben
-#'   werden (Spalte `demo`)? Default TRUE, damit man sie bei Bedarf selbst
-#'   herausfiltern kann.
-#'
-#' @returns Ein Tibble, eine Zeile pro Attempt.
+#' @returns A tibble with one row per attempt.
 #' @export
 DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
 
   stopifnot(is.list(res))
 
-  # Akzeptiere sowohl das volle RDS-Objekt (mit $results/$session) als
-  # auch eine bereits extrahierte Ergebnisliste direkt.
   results_list <- if (!is.null(res[["results"]])) res[["results"]] else res
 
   if (is.null(p_id)) {
@@ -102,18 +54,14 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
   keep_idx <- grep("^DMT_(demo_)?trial_[0-9]+_attempt_[0-9]+$", label_names)
 
   if (length(keep_idx) == 0) {
-    logging::logwarn("DMT_results_to_long(): keine DMT-Trial-Ergebnisse gefunden.")
+    logging::logwarn("DMT_results_to_long(): No DMT trial results found.")
     return(tibble::tibble())
   }
 
-  # Sicherheitsnetz: doppelte Labels deuten auf Ergebnisdateien hin, die
-  # VOR dem Label-/collect_answer-Fix in trial_logic.R/feedback.R erzeugt
-  # wurden. Wird trotzdem verarbeitet (positionsbasiert, nicht per Name),
-  # aber mit Warnung.
   dup_labels <- label_names[keep_idx][duplicated(label_names[keep_idx])]
   if (length(dup_labels) > 0) {
     logging::logwarn(
-      "DMT_results_to_long(): doppelte Labels gefunden (%s) - vermutlich Daten von VOR dem Label-Fix. Alle Vorkommen werden trotzdem uebernommen, bitte Datenqualitaet pruefen.",
+      "DMT_results_to_long(): Duplicated labels found (%s). All occurrences are kept.",
       paste(unique(dup_labels), collapse = ", ")
     )
   }
@@ -124,23 +72,17 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
     answer <- results_list[[i]]
 
     if (is.null(answer) || is.null(answer$res_summary)) {
-      logging::logwarn("DMT_results_to_long(): '%s' hat kein res_summary, wird uebersprungen.", label)
+      logging::logwarn("DMT_results_to_long(): '%s' has no res_summary, skipping.", label)
       return(NULL)
     }
 
-    # Fallback fuer aeltere Daten (vor der dmt_get_answer()-Erweiterung):
-    # trial_no/attempt notfalls aus dem Label parsen.
+    # Fall back to the label if trial_no/attempt are not stored in the answer
     core_label <- sub("^DMT_(demo_)?trial_", "", label)
     label_nums <- as.integer(unlist(strsplit(core_label, "_attempt_")))
 
     trial_no <- answer$trial_no %||% label_nums[1]
     attempt  <- answer$attempt  %||% label_nums[2]
 
-    inst_wide <- dmt_res_summary_wide(answer$res_summary)
-
-    # Verweildauer auf der Feedback-Seite NACH diesem Attempt: eigenes
-    # Ergebnis "<label>_feedback" (siehe DMT_trial_page()). Fehlt bei
-    # aelteren Daten -> NA.
     feedback_res <- results_list[[paste0(label, "_feedback")]]
     feedback_rt_ms <- if (is.list(feedback_res)) feedback_res$feedback_rt_ms %||% NA_real_ else NA_real_
 
@@ -157,9 +99,9 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
       feedback_layer_shown = answer$feedback_layer_shown %||% NA_integer_,
       global_correct       = answer$global_correct %||% NA
     ) %>%
-      dplyr::bind_cols(inst_wide) %>%
+      dplyr::bind_cols(dmt_res_summary_wide(answer$res_summary)) %>%
       dplyr::mutate(
-        timed_out = answer$timed_out %||% NA,
+        timed_out      = answer$timed_out %||% NA,
         rt_ms          = as.numeric(answer$rt_ms %||% NA_real_),
         stim_plays     = as.integer(answer$stim_plays %||% NA_integer_),
         pattern_plays  = as.integer(answer$pattern_plays %||% NA_integer_),
@@ -171,9 +113,6 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
   if (nrow(rows) == 0) return(rows)
 
   if (!include_demo) {
-    # BUGFIX: vorher !isTRUE(demo) - isTRUE() auf die ganze Spalte ist bei
-    # mehr als einer Zeile immer FALSE, der Filter hat also nie etwas
-    # entfernt. Jetzt zeilenweise (NA bleibt drin wie "kein Demo").
     rows <- dplyr::filter(rows, !(demo %in% TRUE))
   }
 
@@ -191,33 +130,27 @@ DMT_results_to_long <- function(res, p_id = NULL, include_demo = TRUE) {
     dplyr::arrange(cumulative_attempt, trial_no, attempt)
 }
 
-# ------------------------------------------------------------------
-# Phasendauern (Timing-Messung Kinder-Pilot)
-# ------------------------------------------------------------------
-
 #' Phase durations of one or more DMT sessions
 #'
-#' Liest die Phasen-Zeitstempel (`DMT_phase_intro_end`,
-#' `DMT_phase_practice_end`, `DMT_phase_main_start`, `DMT_phase_main_end`,
-#' gesetzt von `phase_timestamp()` in DMT.R) plus `session$time_started`
-#' und berechnet daraus die Dauer der Phasen in Minuten. Fehlende
-#' Zeitstempel (aeltere Daten, Abbruch, num_examples = 0) ergeben NA.
+#' Computes the duration of the test phases in minutes from the session start
+#' time and the phase timestamps saved during the test. Missing timestamps
+#' (e.g. after a dropout or with \code{num_examples = 0}) give \code{NA}.
 #'
-#' @param x Entweder ein Pfad zu einem Ergebnis-Ordner (alle `.rds` darin
-#'   werden gelesen) oder ein einzelnes Ergebnis-Objekt (wie von `readRDS()`).
+#' @param x Either a path to a results directory (all \code{.rds} files in it
+#'   are read) or the results of one participant as returned by
+#'   \code{readRDS()}.
 #'
-#' @returns Ein Tibble, eine Zeile pro Session: `p_id`, `complete`,
-#'   `intro_min` (Start bis Ende Intro inkl. ID-Seite), `practice_min`
-#'   (Uebungs-Trials), `ready_min` ("Jetzt bist du bereit"-Seite),
-#'   `main_min` (Haupttest), `total_min` (Start bis Ende Haupttest).
+#' @returns A tibble with one row per session and the columns \code{p_id},
+#'   \code{complete}, \code{intro_min}, \code{practice_min}, \code{ready_min}
+#'   (the page between practice and main test), \code{main_min} and
+#'   \code{total_min}.
 #' @export
 DMT_phase_durations <- function(x) {
 
   if (is.character(x)) {
     files <- list.files(x, pattern = "[.]rds$", full.names = TRUE)
     return(purrr::map_dfr(files, function(f) {
-      res <- readRDS(f)
-      out <- DMT_phase_durations(res)
+      out <- DMT_phase_durations(readRDS(f))
       if (is.na(out$p_id)) out$p_id <- tools::file_path_sans_ext(basename(f))
       out
     }))
@@ -250,28 +183,23 @@ DMT_phase_durations <- function(x) {
   )
 }
 
-# ------------------------------------------------------------------
-# Alle Teilnehmer eines Ergebnis-Ordners -> Long-Format
-# ------------------------------------------------------------------
-
-#' Convert all DMT result RDS files in a directory into one long tibble
+#' Convert all DMT result files in a directory into long format
 #'
-#' Liest alle `.rds`-Ergebnisdateien in `dir` ein und wendet
-#' \code{\link{DMT_results_to_long}} auf jede an, um einen Datensatz ueber
-#' alle Teilnehmer hinweg zu bauen.
+#' Applies \code{\link{DMT_results_to_long}()} to every results file in
+#' \code{dir} and combines the output.
 #'
-#' @param dir Pfad zum Ergebnis-Ordner (z.B. "output/results").
-#' @param pattern Dateimuster fuer `list.files()`. Default: alle .rds.
-#' @param include_demo s. \code{\link{DMT_results_to_long}}.
+#' @param dir Path to the results directory (e.g. \code{"output/results"}).
+#' @param pattern File name pattern passed to \code{list.files()}.
+#' @inheritParams DMT_results_to_long
 #'
-#' @returns Ein Tibble ueber alle Teilnehmer.
+#' @returns A tibble with one row per attempt across all participants.
 #' @export
 DMT_results_dir_to_long <- function(dir, pattern = "\\.rds$", include_demo = TRUE) {
 
   files <- list.files(dir, pattern = pattern, full.names = TRUE)
 
   if (length(files) == 0) {
-    logging::logwarn("DMT_results_dir_to_long(): keine Dateien in '%s' gefunden.", dir)
+    logging::logwarn("DMT_results_dir_to_long(): No files found in '%s'.", dir)
     return(tibble::tibble())
   }
 
@@ -279,8 +207,7 @@ DMT_results_dir_to_long <- function(dir, pattern = "\\.rds$", include_demo = TRU
 
     res <- readRDS(f)
 
-    fallback_id <- tools::file_path_sans_ext(basename(f))
-    p_id <- res[["session"]][["p_id"]] %||% fallback_id
+    p_id <- res[["session"]][["p_id"]] %||% tools::file_path_sans_ext(basename(f))
 
     DMT_results_to_long(res, p_id = p_id, include_demo = include_demo)
   })

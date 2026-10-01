@@ -7,30 +7,21 @@
 DMT_results_to_long(res, p_id = NULL, include_demo = TRUE)
 }
 \arguments{
-\item{res}{Das komplette Ergebnis-Objekt eines Teilnehmers (Liste mit
-`$results` und optional `$session`), ODER direkt die Ergebnisliste
-selbst (z.B. `psychTestR::results(state)$result`) - beides wird
-erkannt.}
+\item{res}{The results of one participant, either as read from
+\code{output/results/*.rds} (a list with \code{$results} and
+\code{$session}) or the results list itself.}
 
-\item{p_id}{Optionale Teilnehmer-ID als Spalte. Falls NULL, wird
-versucht, sie aus `res$session$p_id` zu lesen; sonst NA.}
+\item{p_id}{Participant ID. If \code{NULL}, it is taken from
+\code{res$session$p_id} if available.}
 
-\item{include_demo}{Sollen Demo-/Instruktions-Trials mit ausgegeben
-werden (Spalte `demo`)? Default TRUE, damit man sie bei Bedarf selbst
-herausfiltern kann.}
+\item{include_demo}{Whether to include practice trials (column
+\code{demo}).}
 }
 \value{
-Ein Tibble, eine Zeile pro Attempt.
+A tibble with one row per attempt.
 }
 \description{
-Nimmt das komplette Ergebnis-Objekt EINES Teilnehmers entgegen, wie es
-`readRDS("output/results/<datei>.rds")` liefert (Liste mit `$results`
-und `$session`), und baut daraus ein Long-Format-Tibble mit einer Zeile
-pro (Trial x Attempt).
-}
-\details{
-Nur Seiten, deren Label dem Muster "DMT_trial_<n>_attempt_<a>" oder
-"DMT_demo_trial_<n>_attempt_<a>" folgt, werden beruecksichtigt (siehe
-trial_logic.R::DMT_trial_page(), Kommentar zu internen Ergebnis-Keys).
-Alle anderen Ergebnis-Eintraege (z.B. aus get_p_id()) werden ignoriert.
+Builds a tibble with one row per trial attempt from the results of one
+participant. Only results labelled \code{DMT_trial_<n>_attempt_<a>} or
+\code{DMT_demo_trial_<n>_attempt_<a>} are used.
 }

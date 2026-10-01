@@ -1,16 +1,3 @@
-# feedback.R
-#
-# Vektorisierte Version: alle nutzer-sichtbaren Strings laufen über
-# psychTestR::i18n() und beziehen sich auf Keys aus DMT_dict.xlsx.
-#
-# Neu: instrument_label() übersetzt die internen Instrument-Codes
-# (HiHat / Snare / Kick, wie sie in trial_logic.R::complete_instruments()
-# als Faktor-Level erzeugt werden) in die im Dict hinterlegten,
-# sprachabhängigen Anzeige-Labels (INSTRUMENT_HIHAT / INSTRUMENT_SNARE /
-# INSTRUMENT_BASSDRUM). Die internen Codes selbst bleiben unverändert,
-# damit die restliche Trial-Logik (dmt_get_answer(), complete_instruments())
-# nicht angefasst werden muss.
-
 DMT_feedback <- function(trial_no, num_trials, tempo, stimulus_drum_matrix, demo = FALSE, stratified_sampling = TRUE, trial_timeout = NULL) {
 
   psychTestR::reactive_page(function(state, answer, ...) {
@@ -72,13 +59,7 @@ parse_feedback <- function(answer, feedback_layer, trial_no, num_trials, tempo) 
   )
 }
 
-# ------------------------------------------------------------------
-# Instrument-Label-Lookup (Dict-Keys: INSTRUMENT_HIHAT / INSTRUMENT_SNARE /
-# INSTRUMENT_BASSDRUM). Vorschlag: diese Funktion nach utils.R verschieben,
-# sobald trial_logic.R (Grid-Labels "Hi-hat"/"Snare"/"Kick") ebenfalls
-# vektorisiert wird, da sie dort erneut gebraucht wird.
-# ------------------------------------------------------------------
-
+# Translated display label for an internal instrument code
 instrument_label <- function(instrument) {
 
   key <- switch(
@@ -86,7 +67,7 @@ instrument_label <- function(instrument) {
     HiHat = "INSTRUMENT_HIHAT",
     Snare = "INSTRUMENT_SNARE",
     Kick  = "INSTRUMENT_BASSDRUM",
-    stop("instrument_label(): unbekanntes Instrument '", instrument, "'")
+    stop("instrument_label(): unknown instrument '", instrument, "'")
   )
 
   psychTestR::i18n(key, html = FALSE)
@@ -118,7 +99,6 @@ feedback_layer_2 <- function(global_correct, breakdown) {
     ) %>%
     dplyr::select(Feedback)
 
-
   shiny::tags$div(
     if (global_correct) {
       shiny::tags$p(psychTestR::i18n("FEEDBACK_CORRECT"))
@@ -126,7 +106,7 @@ feedback_layer_2 <- function(global_correct, breakdown) {
       feedback_container(
         shiny::tags$div(
           style = "text-align: center;",
-          shiny::tags$style(HTML("
+          shiny::tags$style(shiny::HTML("
             table { margin-left: auto; margin-right: auto; }
           ")),
           shiny_table(feedback_parsed, colnames = FALSE, width = "60%")

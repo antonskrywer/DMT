@@ -35,13 +35,13 @@ window.resetDMT = function () {
 
 window.initDMT = function () {
 
-  // Tone.js kann (v.a. auf der ersten Seite) noch nachladen
+  // Tone.js may still be loading (especially on the first page)
   if (!window.Tone) {
     setTimeout(window.initDMT, 100);
     return;
   }
 
-  // Instruktions-Seiten: { lockGrid, highlightRow, demo } (siehe intro.R)
+  // Instruction pages: { lockGrid, highlightRow, demo } (see intro.R)
   const cfg = window.dmtIntroConfig || {};
 
   // --------------------------------------------------
@@ -172,13 +172,8 @@ window.initDMT = function () {
       window.initialSequencerState !== undefined) {
     loadSequencer(window.initialSequencerState);
   } else {
-    // BUGFIX: ohne diesen Reset behaelt Shiny serverseitig den
-    // sequencer_state-Wert der VORHERIGEN Seite, solange der Nutzer auf
-    // der neuen (visuell leeren) Seite keine einzige Zelle anklickt.
-    // Klickt er dann direkt auf Next, wertet dmt_get_answer() faelschlich
-    // das alte Pattern der letzten Seite als Antwort - z.B. ein zuvor
-    // korrekt geloestes Practice-Pattern, was zu einer faelschlich als
-    // "Correct!" gewerteten leeren Eingabe fuehren kann.
+    // Otherwise Shiny keeps the sequencer_state of the previous page until
+    // a cell is clicked.
     if (window.Shiny) {
       Shiny.setInputValue("sequencer_state", matrix, { priority: "event" });
     }
@@ -258,9 +253,8 @@ window.initDMT = function () {
   // AUDIO
   // --------------------------------------------------
 
-  // Einmal pro Tone-Instanz laden und seitenuebergreifend wiederverwenden
-  // (sonst wird bei jedem Seitenwechsel neu geladen/dekodiert und die ersten
-  // Schlaege koennen "buffer not loaded" ausloesen).
+  // Load the samples once per Tone instance and reuse them across pages
+  // (reloading on every page can cause "buffer not loaded" errors).
   if (!window.dmtDrum || window.dmtDrumTone !== Tone) {
     window.dmtDrum = new Tone.Players({
       HiHat: "audio/hihat.wav",
@@ -272,9 +266,8 @@ window.initDMT = function () {
   }
   const drum = window.dmtDrum;
 
-  // Tone wirft "Start time must be strictly greater than previous start
-  // time", wenn ein Player mit gleicher/frueherer Startzeit erneut gestartet
-  // wird (z.B. bei schnellem Stop/Start innerhalb der Lookahead-Zeit).
+  // Tone throws "Start time must be strictly greater than previous start
+  // time" if a player is restarted within the lookahead window.
   window.dmtLastStart = window.dmtLastStart || {};
 
   function playSample(inst, time) {
@@ -285,8 +278,7 @@ window.initDMT = function () {
     p.start(time);
   }
 
-  // Beschriftungen der Stop-Buttons kommen (uebersetzt) aus versteckten
-  // Spans in dmt_ui(); Fallback englisch.
+  // Translated stop button labels come from hidden spans in dmt_ui()
   function labelFromDom(id, fallback) {
     const el = document.getElementById(id);
     const txt = el ? el.textContent.trim() : "";
@@ -432,7 +424,7 @@ window.initDMT = function () {
 
       window.stopDMT();
 
-      // Zaehler fuer attempt_stim_plays (siehe page_metrics_js() in trial_logic.R)
+      // Counter for attempt_stim_plays (see page_metrics_js())
       window.dmtStimPlays = (window.dmtStimPlays || 0) + 1;
 
       stimulusRunning = true;
@@ -459,7 +451,7 @@ window.initDMT = function () {
 
       window.stopDMT();
 
-      // Zaehler fuer attempt_pattern_plays (siehe page_metrics_js() in trial_logic.R)
+      // Counter for attempt_pattern_plays (see page_metrics_js())
       window.dmtPatternPlays = (window.dmtPatternPlays || 0) + 1;
 
       sequencerRunning = true;
@@ -473,9 +465,8 @@ window.initDMT = function () {
   }
 
   // --------------------------------------------------
-  // INSTRUKTIONS-SEITEN (Ebenen): Button "Play <Instrument> sound" spielt
-  // einen Takt lang 2 Schlaege (auf Zaehlzeit 1 und 3 = Schritt 1 und 9),
-  // die Zellen leuchten im Takt auf, danach stoppt die Demo von selbst.
+  // INSTRUCTION PAGES: "Play <instrument> sound" plays two beats (steps 1
+  // and 9) with the cells highlighted, then stops.
   // --------------------------------------------------
 
   if (cfg.demo) {

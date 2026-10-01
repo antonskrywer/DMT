@@ -1,17 +1,10 @@
-# R/data.R
-#
-# Roxygen-Dokumentation für alle exportierten Datenobjekte des DMT-Pakets.
-# Jedes Objekt liegt als .rda unter data/ (erzeugt via usethis::use_data()
-# aus den jeweiligen data_raw/*.R-Skripten) und wird beim Package-Build
-# per Lazy-Loading verfügbar gemacht.
-
 #' DMT dictionary
 #'
 #' The default internationalisation dictionary used by the DMT.
 #' Contains translations for keys used throughout the DMT package
 #' (intro, trial UI, feedback) in three languages: English ("en"),
 #' informal German ("de"), and formal German ("de_f").
-#' Built from \code{data_raw/DMT_dict.xlsx} via \code{data_raw/DMT_dict.R}.
+#' Built from \code{data-raw/DMT_dict.xlsx} via \code{data-raw/DMT_dict.R}.
 #' @name DMT_dict
 #' @docType data
 NULL
@@ -35,12 +28,10 @@ NULL
 
 #' DMT demo/instruction drum matrix
 #'
-#' The item bank of drum patterns used for the practice trials
-#' (\code{DMT_training()} / \code{DMT_demo_loop()}) shown before the
-#' main test (TrialNo = order of use): Easy_1 (kick on 1 and 3),
-#' Practice_2 (kick on 1, snare on 2 and 4, hi-hat on 3; see
-#' data-raw/practice_stimuli.R), then the pedagogical stimuli Easy_2
-#' (snare), Easy_3 (hi-hat) and Easy_4 (kick+snare).
+#' The drum patterns used for the practice trials before the main test,
+#' in order of use (\code{TrialNo}): Easy_1 (kick on 1 and 3), Practice_2
+#' (kick on 1, snare on 2 and 4, hi-hat on 3), Easy_2 (snare), Easy_3
+#' (hi-hat) and Easy_4 (kick and snare).
 #' @name demo_drum_matrix
 #' @docType data
 NULL

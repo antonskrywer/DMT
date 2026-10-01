@@ -1,3 +1,4 @@
+dmt_strata <- c("easy_easy", "easy_hard", "normal_easy", "normal_hard")
 
 dmt_resources <- function() {
 
@@ -13,10 +14,8 @@ dmt_ui_header <- function(load_tone_js = TRUE) {
   shiny::tags$head(
     shiny::tags$link(rel = "icon", href = "data:,"),
 
-    # Tone.js nur laden, wenn es nicht schon da ist (DMT_standalone() laedt es
-    # global ueber additional_scripts): ein erneutes Laden pro Seite wuerde
-    # eine neue Tone-Instanz/AudioContext erzeugen und die gecachten Samples
-    # (window.dmtDrum) ungueltig machen.
+    # Load Tone.js only once: reloading it on every page would create a new
+    # AudioContext and invalidate the cached samples.
     if (load_tone_js)
       shiny::tags$script(shiny::HTML(
         "if (!window.Tone) {

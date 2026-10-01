@@ -5,8 +5,8 @@
 \alias{demo_drum_matrix}
 \title{DMT demo/instruction drum matrix}
 \description{
-The item bank of drum patterns used for the practice trials
-(\code{DMT_training()} / \code{DMT_demo_loop()}) shown before the
-main test, including the four hardcoded pedagogical instruction
-stimuli (kick, snare, hi-hat, kick+snare).
+The drum patterns used for the practice trials before the main test,
+in order of use (\code{TrialNo}): Easy_1 (kick on 1 and 3), Practice_2
+(kick on 1, snare on 2 and 4, hi-hat on 3), Easy_2 (snare), Easy_3
+(hi-hat) and Easy_4 (kick and snare).
 }

@@ -1,5 +1,3 @@
-
-
 ##### A Predictive Coding Approach to Modelling Perceived Drum Pattern Complexity
 #####
 ##### Script to estimate drum pattern complexity
@@ -42,16 +40,16 @@ stimuli_df_to_matrix <- function(drum_matrix, stimulus_id) {
 
   all_zeros <- matrix(0, nrow = 65, ncol = 3) %>%
     as.data.frame() %>%
-    mutate(BeatPositionSixteenth = dplyr::row_number() ) %>%
-    rename(BD = V1, SD = V2, CY = V3)
+    dplyr::mutate(BeatPositionSixteenth = dplyr::row_number()) %>%
+    dplyr::rename(BD = V1, SD = V2, CY = V3)
 
   stim <- drum_matrix %>%
     dplyr::filter(Stimulus == stimulus_id) %>%
     dplyr::select(Stimulus, BeatPositionSixteenth, Instrument)
 
   stim_wide <- stim %>%
-    mutate(On = 1) %>%
-    pivot_wider(
+    dplyr::mutate(On = 1) %>%
+    tidyr::pivot_wider(
       names_from = Instrument,
       values_from = On,
       values_fill = 0
@@ -69,11 +67,10 @@ stimuli_df_to_matrix <- function(drum_matrix, stimulus_id) {
     stim_wide <- stim_wide %>% dplyr::mutate(Snare = 0L)
   }
 
-
   mat <- all_zeros %>% dplyr::full_join(stim_wide, by = "BeatPositionSixteenth") %>%
-    mutate(BD = case_when (Kick == 1 ~ 1, TRUE ~ 0),
-           SD = case_when (Snare == 1 ~ 1, TRUE ~ 0),
-           CY = case_when (HiHat == 1 ~ 1, TRUE ~ 0) ) %>%
+    dplyr::mutate(BD = dplyr::case_when(Kick == 1 ~ 1, TRUE ~ 0),
+                  SD = dplyr::case_when(Snare == 1 ~ 1, TRUE ~ 0),
+                  CY = dplyr::case_when(HiHat == 1 ~ 1, TRUE ~ 0)) %>%
     dplyr::select(BD, SD, CY) %>%
     as.matrix()
 
