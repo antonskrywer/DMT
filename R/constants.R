@@ -25,6 +25,13 @@ dmt_ui_header <- function(load_tone_js = TRUE) {
          }"
       )),
 
-    shiny::tags$link(rel = "stylesheet", type = "text/css", href = "css/dmt.css")
+    shiny::tags$link(rel = "stylesheet", type = "text/css", href = dmt_asset_url("css/dmt.css"))
   )
+}
+
+# Appends a content hash so that browsers reload the file after an update
+# instead of using a cached copy.
+dmt_asset_url <- function(path) {
+  file <- system.file(path, package = "DMT")
+  paste0(path, "?v=", substr(unname(tools::md5sum(file)), 1, 8))
 }

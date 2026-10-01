@@ -586,7 +586,7 @@ dmt_ui <- function(trial_no,
 
     if(show_input_grid) input_grid,
 
-    shiny::tags$script(src = "js/dmt.js"),
+    shiny::tags$script(src = dmt_asset_url("js/dmt.js")),
 
     shiny::tags$script(
       "
