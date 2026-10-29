@@ -13,7 +13,8 @@ DMT(
   custom_stratified_sampling_allocation = NULL,
   trial_timeout = 90,
   language = "en",
-  with_id = TRUE
+  with_id = TRUE,
+  with_final_page = TRUE
 )
 }
 \arguments{
@@ -46,6 +47,11 @@ trials).}
 
 \item{with_id}{If \code{TRUE}, participants are asked for an ID at the
 start. Otherwise psychTestR assigns one automatically.}
+
+\item{with_final_page}{If \code{TRUE}, the timeline ends by saving the
+results as complete and showing a final page. Set it to \code{FALSE}
+when the DMT is part of a battery: the timeline then ends after the
+main trials, and the battery decides when the session is complete.}
 }
 \value{
 A psychTestR timeline.

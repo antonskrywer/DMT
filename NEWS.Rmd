@@ -1,3 +1,9 @@
+# DMT 0.2.2
+
+- `DMT()` finds its datasets (`DMT_dict`, item banks, demo patterns) without `library(DMT)`, e.g. when called as `DMT::DMT()` inside a battery.
+
+- Add `with_final_page` parameter to `DMT()`. With `FALSE`, the timeline ends after the main trials without the complete save and the final page, for use in batteries.
+
 
 
 # DMT 0.2.1

@@ -2,7 +2,7 @@ DMT_page_loop <- function(trial_no,
                           num_trials,
                           tempo,
                           demo = FALSE,
-                          stimulus_drum_matrix = drum_matrix,
+                          stimulus_drum_matrix = DMT::drum_matrix,
                           show_solution = FALSE,
                           with_feedback = TRUE,
                           trial_timeout = 90,
@@ -155,7 +155,7 @@ DMT_trial_page <- function(trial_no,
                            show_input_grid = TRUE,
                            attempt = 1L,
                            show_play_buttons = TRUE,
-                           stimulus_drum_matrix = drum_matrix,
+                           stimulus_drum_matrix = DMT::drum_matrix,
                            demo = FALSE,
                            trial_timeout = 90,
                            initial_state = NULL,
@@ -352,7 +352,7 @@ dmt_get_answer <- function(drum_matrix, stratified_sampling) {
 
     logging::loginfo("trial_no: %i | stimulus_id: %s | demo: %s", trial_no, stimulus_id, is_demo)
 
-    stimulus <- (if (is_demo) demo_drum_matrix else drum_matrix) %>%
+    stimulus <- (if (is_demo) DMT::demo_drum_matrix else drum_matrix) %>%
       dplyr::filter(Stimulus == !!stimulus_id)
 
     correct_answer <- stimulus %>%

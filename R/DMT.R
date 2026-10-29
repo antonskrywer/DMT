@@ -101,6 +101,10 @@ DMT_problems_info <- function(researcher_email, language) {
 #' @param language Test language, one of \code{\link{DMT_languages}()}.
 #' @param with_id If \code{TRUE}, participants are asked for an ID at the
 #'   start. Otherwise psychTestR assigns one automatically.
+#' @param with_final_page If \code{TRUE}, the timeline ends by saving the
+#'   results as complete and showing a final page. Set it to \code{FALSE}
+#'   when the DMT is part of a battery: the timeline then ends after the
+#'   main trials, and the battery decides when the session is complete.
 #'
 #' @returns A psychTestR timeline.
 #' @export
@@ -117,20 +121,21 @@ DMT <- function(num_trials = 5L,
                 custom_stratified_sampling_allocation = NULL,
                 trial_timeout = 90,
                 language = "en",
-                with_id = TRUE) {
+                with_id = TRUE,
+                with_final_page = TRUE) {
 
   if(!is.null(custom_stratified_sampling_allocation) && sum(unlist(custom_stratified_sampling_allocation)) != num_trials) {
     stop("Number of trials specified in custom_stratified_sampling_allocation must add up to num_trials.")
   }
 
-  n_demo_stimuli <- dplyr::n_distinct(demo_drum_matrix$TrialNo)
+  n_demo_stimuli <- dplyr::n_distinct(DMT::demo_drum_matrix$TrialNo)
 
   if(num_examples > n_demo_stimuli) {
     stop(sprintf("num_examples (%i) exceeds the number of available demo stimuli (%i).", as.integer(num_examples), n_demo_stimuli))
   }
 
-  easy_stimuli_drum_matrix <- prepare_item_bank(easy_stimuli_drum_matrix, source = "easy")
-  drum_matrix <- prepare_item_bank(drum_matrix, source = "normal")
+  easy_stimuli_drum_matrix <- prepare_item_bank(DMT::easy_stimuli_drum_matrix, source = "easy")
+  drum_matrix <- prepare_item_bank(DMT::drum_matrix, source = "normal")
 
   # Used if stratified_sampling = FALSE
   full_drum_matrix <- dplyr::bind_rows(easy_stimuli_drum_matrix, drum_matrix) %>%
@@ -201,12 +206,12 @@ DMT <- function(num_trials = 5L,
 
       phase_timestamp("main_end"),
 
-      psychTestR::elt_save_results_to_disk(complete = TRUE),
+      if (with_final_page) psychTestR::elt_save_results_to_disk(complete = TRUE),
 
-      psychTestR::final_page(psychTestR::i18n("FINAL_MESSAGE"))
+      if (with_final_page) psychTestR::final_page(psychTestR::i18n("FINAL_MESSAGE"))
     ),
 
-    dict = DMT_dict_for_language(DMT_dict, language)
+    dict = DMT_dict_for_language(DMT::DMT_dict, language)
   )
 }
 
@@ -251,7 +256,7 @@ DMT_demo_loop <- function(trial_no, num_examples, tempo, with_feedback = TRUE, t
       button_text = psychTestR::i18n("CONTINUE")
     ),
 
-    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = demo_drum_matrix, with_feedback = with_feedback, trial_timeout = trial_timeout)
+    DMT_page_loop(trial_no, num_examples, tempo, demo = TRUE, stimulus_drum_matrix = DMT::demo_drum_matrix, with_feedback = with_feedback, trial_timeout = trial_timeout)
 
   ) %>% unlist()
 }
@@ -426,8 +431,8 @@ sample_trials <- function(num_trials, custom_stratified_sampling_allocation) {
   psychTestR::code_block(function(state, ...) {
 
     # Label
-    easy_stimuli_drum_matrix <- prepare_item_bank(easy_stimuli_drum_matrix, source = "easy")
-    drum_matrix <- prepare_item_bank(drum_matrix, source = "normal")
+    easy_stimuli_drum_matrix <- prepare_item_bank(DMT::easy_stimuli_drum_matrix, source = "easy")
+    drum_matrix <- prepare_item_bank(DMT::drum_matrix, source = "normal")
 
     resolved <- resolve_stratum_allocation(
       easy_stimuli_drum_matrix, drum_matrix, num_trials, custom_stratified_sampling_allocation
