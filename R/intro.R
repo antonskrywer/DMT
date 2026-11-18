@@ -23,7 +23,6 @@ DMT_intro <- function(tempo,
     # Learning test
     intro_text_page(
       shiny::tags$p(psychTestR::i18n("INSTR_LEARNING_1")),
-      shiny::tags$p(psychTestR::i18n("INSTR_LEARNING_2")),
       shiny::tags$p(psychTestR::i18n("INSTR_LEARNING_3"))
     ),
 
@@ -48,19 +47,17 @@ DMT_intro <- function(tempo,
       show_play_buttons = TRUE
     ),
 
-    # Feedback
-    if (with_feedback) intro_text_page(
-      shiny::tags$p(shiny::tags$strong(psychTestR::i18n("INSTR_FEEDBACK_1"))),
-      shiny::tags$p(psychTestR::i18n("INSTR_FEEDBACK_2"))
-    ),
-
-    # Practice trials
+    # Practice trials. The feedback note is shown here, right before the
+    # first trials with feedback, not after the free exploration (where the
+    # pattern could not yet be "wrong"). Without practice trials it moves to
+    # the page announcing the main test (see DMT()).
     if (num_examples > 0L) intro_text_page(
       shiny::tags$p(shiny::tags$strong(psychTestR::i18n("PRACTICE_TITLE"))),
       shiny::tags$p(psychTestR::i18n("INSTR_PRACTICE_1")),
       if (!is.null(trial_timeout)) shiny::tags$p(
         psychTestR::i18n("INSTR_PRACTICE_TIMER", sub = c(trial_timeout = as.character(trial_timeout)))
       ),
+      if (with_feedback) feedback_note(),
       shiny::tags$p(psychTestR::i18n("MISTAKES_NORMAL"))
     )
 
@@ -68,6 +65,13 @@ DMT_intro <- function(tempo,
 
 }
 
+
+feedback_note <- function() {
+  shiny::tags$p(
+    shiny::tags$strong(psychTestR::i18n("INSTR_FEEDBACK_1")), " ",
+    psychTestR::i18n("INSTR_FEEDBACK_2")
+  )
+}
 
 intro_text_page <- function(...) {
   psychTestR::one_button_page(

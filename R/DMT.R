@@ -191,7 +191,14 @@ DMT <- function(num_trials = 5L,
 
       if(num_examples > 0L) phase_timestamp("practice_end"),
 
-      psychTestR::one_button_page(psychTestR::i18n("READY_MESSAGE"), button_text = psychTestR::i18n("CONTINUE")),
+      psychTestR::one_button_page(
+        shiny::div(
+          shiny::tags$p(psychTestR::i18n("READY_MESSAGE")),
+          # Without practice trials the feedback note has not been shown yet.
+          if (num_examples == 0L && with_feedback) feedback_note()
+        ),
+        button_text = psychTestR::i18n("CONTINUE")
+      ),
 
       phase_timestamp("main_start"),
 
