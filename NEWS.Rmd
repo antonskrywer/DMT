@@ -1,3 +1,7 @@
+# DMT 0.2.5
+
+- Fix playback freezing after a page without grid (e.g. feedback): the playhead loop of that page survived `Tone.Transport.cancel(0)` (start tick -1) and threw on every tick, so the playhead stopped after the first step and no further notes played. The loop is now cleared by id, scheduled at tick 0 and only created on pages with a grid.
+
 # DMT 0.2.2
 
 - `DMT()` finds its datasets (`DMT_dict`, item banks, demo patterns) without `library(DMT)`, e.g. when called as `DMT::DMT()` inside a battery.

@@ -8,6 +8,18 @@ window.resetDMT = function () {
   // ----------------------------
   try {
     Tone.Transport.stop();
+
+    // Clear the playhead loop of the previous page by id. cancel(0) alone
+    // misses it: a loop scheduled right after stop() can get start tick -1,
+    // survives every cancel(0) and is restarted with the next
+    // Transport.start(). On a page without grid (e.g. feedback) its callback
+    // throws on every tick, which aborts the whole tick: the playhead freezes
+    // and no further notes play.
+    if (window.dmtLoopId !== undefined && window.dmtLoopId !== null) {
+      Tone.Transport.clear(window.dmtLoopId);
+      window.dmtLoopId = null;
+    }
+
     Tone.Transport.cancel(0);
     Tone.Transport.position = 0;
   } catch (e) {
@@ -17,12 +29,16 @@ window.resetDMT = function () {
   // ----------------------------
   // Remove scheduled parts
   // ----------------------------
-  if (window.part) {
-    try {
-      window.part.dispose();
-    } catch (e) {}
-    window.part = null;
-  }
+  [window.part,
+   window.drumPlayer && window.drumPlayer.part,
+   window.dmtIntroPart].forEach(p => {
+    if (p) {
+      try { p.dispose(); } catch (e) {}
+    }
+  });
+  window.part = null;
+  if (window.drumPlayer) window.drumPlayer.part = null;
+  window.dmtIntroPart = null;
 
   // ----------------------------
   // Reset UI grid
@@ -348,26 +364,37 @@ window.initDMT = function () {
   // SEQUENCER LOOP (SAFE SINGLE INSTANCE)
   // --------------------------------------------------
 
-  window.dmtLoopId = Tone.Transport.scheduleRepeat((time) => {
+  // Pages without grid (feedback, text pages) get no loop at all.
+  const hasGrid = cells.length === rows && cells.every(row => row.length === cols);
 
-    if (sequencerRunning) {
-      for (let r = 0; r < rows; r++) {
-        if (matrix[r][step]) {
-          playSample(["HiHat", "Snare", "Kick"][r], time);
+  if (window.dmtLoopId !== undefined && window.dmtLoopId !== null) {
+    Tone.Transport.clear(window.dmtLoopId);
+    window.dmtLoopId = null;
+  }
+
+  if (hasGrid) {
+    // Explicit start tick 0, so that cancel(0) can always remove it
+    window.dmtLoopId = Tone.Transport.scheduleRepeat((time) => {
+
+      if (sequencerRunning) {
+        for (let r = 0; r < rows; r++) {
+          if (matrix[r] && matrix[r][step]) {
+            playSample(["HiHat", "Snare", "Kick"][r], time);
+          }
         }
       }
-    }
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        cells[r][c].classList.remove("playhead");
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          cells[r][c].classList.remove("playhead");
+        }
+        cells[r][step].classList.add("playhead");
       }
-      cells[r][step].classList.add("playhead");
-    }
 
-    step = (step + 1) % cols;
+      step = (step + 1) % cols;
 
-  }, "16n");
+    }, "16n", 0);
+  }
 
   // --------------------------------------------------
   // STIMULUS PLAYER
